@@ -134,9 +134,10 @@ def is_year_optimized(year_data):
     total_rrsp = calculate_annual_rrsp(year_data)
     taxable_income = max(0, total_gross - total_rrsp)
     
-    # Optimized if no penthouse exposure (taxable income under $181,440)
+    # Optimized if no penthouse exposure (taxable income at or under $181,440)
+    # Note: Exactly $181,440 is NOT in Penthouse due to > comparison in tax calculation
     penthouse_threshold = 181440
-    return taxable_income < penthouse_threshold
+    return taxable_income <= penthouse_threshold
 
 # --- 3. CONFIGURATION & STYLING ---
 st.set_page_config(
@@ -612,8 +613,8 @@ if st.session_state.current_page == "Home":
         <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
             <strong>📊 Year Status Legend:</strong>
             <span style="margin-left: 20px;">⚪ <strong>Empty</strong> - No data saved yet</span>
-            <span style="margin-left: 20px;">🟠 <strong>In Progress</strong> - Has data but taxable income ≥ $181,440 (Penthouse exposure)</span>
-            <span style="margin-left: 20px;">🟢 <strong>Optimized</strong> - Fully optimized with taxable income < $181,440</span>
+            <span style="margin-left: 20px;">🟠 <strong>In Progress</strong> - Has data but taxable income > $181,440 (Penthouse exposure)</span>
+            <span style="margin-left: 20px;">🟢 <strong>Optimized</strong> - Fully optimized with taxable income ≤ $181,440</span>
         </div>
     """, unsafe_allow_html=True)
     
@@ -1302,8 +1303,9 @@ else:
     planning_complete = ((t4_gross_income > 0 or other_income > 0) and 
                          rrsp_room > 0 and tfsa_room > 0)
     
-    # Only show OPTIMIZED if planning is complete AND below threshold
-    is_optimized = planning_complete and taxable_income < penthouse_threshold
+    # Only show OPTIMIZED if planning is complete AND at or below threshold
+    # Note: Income of exactly $181,440 is NOT taxed in Penthouse (due to > comparison in tax calc)
+    is_optimized = planning_complete and taxable_income <= penthouse_threshold
     
     # Remaining room calculations
     remaining_rrsp_room = max(0, rrsp_room - total_rrsp_contributions)
@@ -1371,7 +1373,7 @@ else:
     
     # Optimization Status Banner
     if is_optimized:
-        st.success(f"🟢 **OPTIMIZED** - Your taxable income (${taxable_income:,.0f}) is below the Penthouse threshold (${penthouse_threshold:,.0f}). This year will show GREEN on the home page.")
+        st.success(f"🟢 **OPTIMIZED** - Your taxable income (${taxable_income:,.0f}) is at or below the Penthouse threshold (${penthouse_threshold:,.0f}). This year will show GREEN on the home page.")
     else:
         deficit = taxable_income - penthouse_threshold
         additional_rrsp_needed = deficit
@@ -1658,7 +1660,7 @@ else:
     
     description_box(
         "Optimization Roadmap",
-        f"**Goal**: Reduce taxable income below ${penthouse_threshold:,.0f} to avoid the Penthouse bracket (47.97% tax rate). "
+        f"**Goal**: Reduce taxable income to or below ${penthouse_threshold:,.0f} to avoid the Penthouse bracket (47.97% tax rate). "
         f"Current status: {'✅ Optimized' if is_optimized else '⚠️ Needs Optimization'}"
     )
     
