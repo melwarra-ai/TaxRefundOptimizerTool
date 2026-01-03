@@ -371,40 +371,9 @@ if st.session_state.current_page == "Home":
         )
     
     # Portfolio Growth Dashboard
-    if rrsp_balance_start > 0 or tfsa_balance_start > 0 or annual_rrsp_periodic > 0:
+    if rrsp_balance_start > 0 or tfsa_balance_start > 0:
         st.divider()
         st.markdown("### 💼 Portfolio Growth Tracker")
-        
-        # Show RRSP contribution breakdown
-        if annual_rrsp_periodic > 0:
-            st.markdown("#### 🎯 RRSP Contribution Breakdown")
-            col_breakdown1, col_breakdown2, col_breakdown3 = st.columns(3)
-            
-            with col_breakdown1:
-                st.metric(
-                    "Your Paycheck Contributions",
-                    f"${employee_rrsp_contribution:,.0f}",
-                    delta=f"{biweekly_pct:.1f}% of base salary",
-                    help="Amount deducted from your paychecks throughout the year"
-                )
-            
-            with col_breakdown2:
-                st.metric(
-                    "Employer Match",
-                    f"${employer_rrsp_contribution:,.0f}",
-                    delta=f"{min(biweekly_pct, employer_match_cap):.1f}% matched",
-                    help=f"Free money! Employer matches 100% up to {employer_match_cap:.1f}% cap"
-                )
-            
-            with col_breakdown3:
-                st.metric(
-                    "Total Periodic RRSP",
-                    f"${annual_rrsp_periodic:,.0f}",
-                    delta=f"${employer_rrsp_contribution:,.0f} is FREE",
-                    help="Combined employee + employer contributions from paychecks"
-                )
-            
-            st.divider()
         
         description_box(
             "Year-End Portfolio Projection",
@@ -887,42 +856,27 @@ if st.session_state.current_page == "Home":
         })
     
     # Insight 4: Employer match
-    if employer_match_cap > 0:
-        employer_contribution = base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+    if employer_match > 0:
+        employer_contribution = base_salary * (employer_match / 100)
         employee_contribution = base_salary * (biweekly_pct / 100)
         
         if employee_contribution > 0:
-            if biweekly_pct >= employer_match_cap:
-                # Maximizing match
-                insights.append({
-                    "icon": "🎁",
-                    "title": "Excellent: Maximizing Employer Match",
-                    "message": f"You're contributing {biweekly_pct:.1f}% (${employee_contribution:,.0f}) and your employer is matching "
-                              f"{employer_match_cap:.1f}% (${employer_contribution:,.0f}). You're getting the full match! "
-                              f"This is ${employer_contribution:,.0f} of free money every year. Keep it up!",
-                    "priority": "high"
-                })
-            else:
-                # Not maximizing match
-                missed_match = base_salary * (employer_match_cap - biweekly_pct) / 100
-                insights.append({
-                    "icon": "⚠️",
-                    "title": "Opportunity: Not Maximizing Employer Match",
-                    "message": f"You're contributing {biweekly_pct:.1f}% (${employee_contribution:,.0f}) but your employer will match up to "
-                              f"{employer_match_cap:.1f}%. You're currently getting ${employer_contribution:,.0f} in employer match, "
-                              f"but you're leaving ${missed_match:,.0f} of FREE MONEY on the table. "
-                              f"Increase your contribution to {employer_match_cap:.1f}% to capture the full match.",
-                    "priority": "high"
-                })
-        else:
-            # Not contributing at all
-            potential_match = base_salary * (employer_match_cap / 100)
+            instant_return_pct = (employer_contribution / employee_contribution) * 100
             insights.append({
-                "icon": "🚨",
-                "title": "Critical: Missing 100% of Employer Match",
-                "message": f"Your employer offers to match up to {employer_match_cap:.1f}% of your base salary (${potential_match:,.0f} per year). "
-                          f"You're currently contributing 0%, so you're leaving ALL of this free money on the table. "
-                          f"This is a guaranteed 100% return on your contribution up to {employer_match_cap:.1f}%. Start contributing immediately!",
+                "icon": "🎁",
+                "title": "Free Money: Employer Match",
+                "message": f"Your employer is contributing ${employer_contribution:,.0f} annually ({employer_match}% match). "
+                          f"This represents a **{instant_return_pct:.1f}% instant return** on your ${employee_contribution:,.0f} contribution. "
+                          f"Employer matching is the single best investment return available - always maximize it first.",
+                "priority": "high"
+            })
+        else:
+            insights.append({
+                "icon": "🎁",
+                "title": "Free Money: Employer Match Available",
+                "message": f"Your employer offers a {employer_match}% match (${employer_contribution:,.0f} potential free money). "
+                          f"You're currently not contributing, so you're leaving this free money on the table. "
+                          f"Start contributing to claim this benefit.",
                 "priority": "high"
             })
     
@@ -1208,8 +1162,11 @@ st.markdown("""
             rrsp_start = data.get("rrsp_balance_start", 0)
             tfsa_start = data.get("tfsa_balance_start", 0)
             
-            # Use helper function for RRSP calculation
-            annual_rrsp = calculate_annual_rrsp(data)
+            annual_rrsp = (data.get('base_salary', 0) * 
+                          (data.get('biweekly_pct', 0) + data.get('employer_match', 0)) / 100) + \
+                          data.get('rrsp_lump_sum_optimization', 0) + \
+                          data.get('rrsp_lump_sum_additional', 0) + \
+                          data.get('rrsp_lump_sum', 0)  # Legacy
             tfsa_contrib = data.get('tfsa_lump_sum', 0)
             
             # Start of year
@@ -1430,7 +1387,11 @@ st.markdown("""
                 elif is_optimized:
                     # Green - Optimized
                     data = all_history[str(yr)]
-                    annual_rrsp = calculate_annual_rrsp(data)
+                    annual_rrsp = (data.get('base_salary', 0) * 
+                                  (data.get('biweekly_pct', 0) + data.get('employer_match', 0)) / 100) + \
+                                  data.get('rrsp_lump_sum_optimization', 0) + \
+                                  data.get('rrsp_lump_sum_additional', 0) + \
+                                  data.get('rrsp_lump_sum', 0)
                     status_emoji = "🟢"
                     status_text = f"${annual_rrsp:,.0f}"
                     button_label = f"📅 **{yr}**\n{status_text}\n{status_emoji} Optimized"
@@ -1438,7 +1399,11 @@ st.markdown("""
                 else:
                     # Orange - In Progress
                     data = all_history[str(yr)]
-                    annual_rrsp = calculate_annual_rrsp(data)
+                    annual_rrsp = (data.get('base_salary', 0) * 
+                                  (data.get('biweekly_pct', 0) + data.get('employer_match', 0)) / 100) + \
+                                  data.get('rrsp_lump_sum_optimization', 0) + \
+                                  data.get('rrsp_lump_sum_additional', 0) + \
+                                  data.get('rrsp_lump_sum', 0)
                     status_emoji = "🟠"
                     status_text = f"${annual_rrsp:,.0f}"
                     button_label = f"📅 **{yr}**\n{status_text}\n{status_emoji} In Progress"
@@ -1481,8 +1446,11 @@ st.markdown("""
             other_inc = data.get('other_income', 0)
             total_gross = t4_gross + other_inc
             
-            # Use helper function for RRSP calculation
-            annual_rrsp = calculate_annual_rrsp(data)
+            annual_rrsp = (data.get('base_salary', 0) * 
+                          (data.get('biweekly_pct', 0) + data.get('employer_match', 0)) / 100) + \
+                          data.get('rrsp_lump_sum_optimization', 0) + \
+                          data.get('rrsp_lump_sum_additional', 0) + \
+                          data.get('rrsp_lump_sum', 0)  # Legacy support
             tfsa_contrib = data.get('tfsa_lump_sum', 0)
             gross = total_gross
             
@@ -1842,8 +1810,12 @@ else:
             if prev_year in all_history:
                 prev_data = all_history[prev_year]
                 
-                # Calculate remaining room from previous year using helper function
-                prev_annual_rrsp = calculate_annual_rrsp(prev_data)
+                # Calculate remaining room from previous year
+                prev_annual_rrsp = (prev_data.get('base_salary', 0) * 
+                                   (prev_data.get('biweekly_pct', 0) + prev_data.get('employer_match', 0)) / 100) + \
+                                   prev_data.get('rrsp_lump_sum_optimization', 0) + \
+                                   prev_data.get('rrsp_lump_sum_additional', 0) + \
+                                   prev_data.get('rrsp_lump_sum', 0)  # Legacy
                 prev_tfsa_contrib = prev_data.get('tfsa_lump_sum', 0)
                 
                 prev_rrsp_room_remaining = max(0, prev_data.get('rrsp_room', 0) - prev_annual_rrsp)
@@ -1894,8 +1866,12 @@ else:
                 prev_rrsp_start = prev_data.get("rrsp_balance_start", 0)
                 prev_tfsa_start = prev_data.get("tfsa_balance_start", 0)
                 
-                # Calculate previous year's contributions using helper function
-                prev_annual_rrsp = calculate_annual_rrsp(prev_data)
+                # Calculate previous year's contributions
+                prev_annual_rrsp = (prev_data.get('base_salary', 0) * 
+                                   (prev_data.get('biweekly_pct', 0) + prev_data.get('employer_match', 0)) / 100) + \
+                                   prev_data.get('rrsp_lump_sum_optimization', 0) + \
+                                   prev_data.get('rrsp_lump_sum_additional', 0) + \
+                                   prev_data.get('rrsp_lump_sum', 0)  # Legacy
                 prev_tfsa_contrib = prev_data.get('tfsa_lump_sum', 0)
                 
                 # Calculate previous year's growth
