@@ -7,7 +7,7 @@ import streamlit.components.v1 as components
 from datetime import datetime
 
 # --- APP VERSION ---
-APP_VERSION = "v1.0.0"
+APP_VERSION = "v5.0.0"
 APP_DATE = "January 2026"
 
 # --- 1. PERSISTENCE ENGINE ---
@@ -294,20 +294,157 @@ all_history = load_all_data()
 if st.session_state.current_page == "Home":
     st.title("🏦 TAX Optimization and TFSA Utilization")
     
-    description_box(
-        "Strategic Financial Command Center",
-        "Welcome to your comprehensive multi-year tax optimization platform. This suite helps you minimize taxes, "
-        "maximize RRSP/TFSA contributions, and track portfolio growth across time. "
-        "**How to use this dashboard:** (1) Review your global wealth summary to see current portfolio value, "
-        "(2) Check the portfolio growth chart to visualize your trajectory, "
-        "(3) Select a planning year below to optimize that specific tax year, "
-        "(4) Return here to see how your multi-year strategy is performing. "
-        "**Green years = optimized, Orange = needs work, Gray = not started.**"
-    )
+    # Collapsible Help/Guide Section
+    with st.expander("📖 How to Use This Dashboard", expanded=False):
+        st.markdown("""
+        Welcome to your comprehensive multi-year tax optimization platform. This suite helps you minimize taxes, 
+        maximize RRSP/TFSA contributions, and track portfolio growth across time.
+        
+        **Quick Start Guide:**
+        1. **Review Global Wealth Summary** - See your current portfolio value and cumulative statistics
+        2. **Update Investment Snapshot** - Track your actual account balances across institutions
+        3. **Check Planning Years** - Select a year to optimize that specific tax year
+        4. **Analyze Trajectory** - Review your portfolio growth charts and multi-year analytics
+        
+        **Year Status Colors:**
+        - 🟢 **Green** = Optimized (taxable income ≤ $181,440)
+        - 🟠 **Orange** = In Progress (needs more RRSP contributions)
+        - ⚪ **Gray** = Not Started (no data entered yet)
+        """)
     
-    # Investment Snapshot Worksheet
-    st.markdown("### 📊 Investment Snapshot Worksheet")
-    st.markdown("Track your actual account balances across institutions. This data is saved locally and does not affect tax calculations.")
+    # SECTION 1: GLOBAL WEALTH SUMMARY (Moved to Top)
+    if all_history:
+        st.markdown("## 💎 Global Wealth Summary")
+        
+        total_rrsp_all = 0
+        total_tfsa_all = 0
+        total_tax_shield = 0
+        total_contributions = 0
+        total_investment_growth = 0
+        
+        # Get the latest year's ending balance
+        latest_year = max(all_history.keys(), key=lambda x: int(x))
+        latest_data = all_history[latest_year]
+        
+        for yr, data in all_history.items():
+            t4_gross = data.get('t4_gross_income', 0)
+            other_inc = data.get('other_income', 0)
+            total_gross = t4_gross + other_inc
+            
+            # Use helper function for RRSP calculation
+            annual_rrsp = calculate_annual_rrsp(data)
+            tfsa_contrib = data.get('tfsa_lump_sum', 0)
+            
+            total_rrsp_all += annual_rrsp
+            total_tfsa_all += tfsa_contrib
+            total_contributions += annual_rrsp + tfsa_contrib
+            
+            # Calculate tax shield value
+            refund = calculate_tax_refund(total_gross, annual_rrsp)
+            total_tax_shield += refund
+        
+        # Get projected balances from latest year
+        if latest_data:
+            target_cagr = latest_data.get("target_cagr", 7.0) / 100
+            rrsp_start = latest_data.get("rrsp_balance_start", 0)
+            tfsa_start = latest_data.get("tfsa_balance_start", 0)
+            
+            # Use helper function for RRSP calculation
+            annual_rrsp = calculate_annual_rrsp(latest_data)
+            tfsa_contrib = latest_data.get('tfsa_lump_sum', 0)
+            
+            # Calculate end of year balances (growth + new contributions)
+            rrsp_growth = rrsp_start * target_cagr + annual_rrsp * (target_cagr / 2)
+            tfsa_growth = tfsa_start * target_cagr + tfsa_contrib * (target_cagr / 2)
+            
+            latest_rrsp_balance = rrsp_start + rrsp_growth + annual_rrsp
+            latest_tfsa_balance = tfsa_start + tfsa_growth + tfsa_contrib
+            
+            total_portfolio_value = latest_rrsp_balance + latest_tfsa_balance
+            total_investment_growth = total_portfolio_value - total_contributions
+        else:
+            latest_rrsp_balance = 0
+            latest_tfsa_balance = 0
+            total_portfolio_value = 0
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "Current RRSP Balance",
+                f"${latest_rrsp_balance:,.0f}",
+                delta=f"${total_rrsp_all:,.0f} contributed",
+                help=f"Projected RRSP value at end of {latest_year}, including all growth and contributions"
+            )
+        
+        with col2:
+            st.metric(
+                "Current TFSA Balance",
+                f"${latest_tfsa_balance:,.0f}",
+                delta=f"${total_tfsa_all:,.0f} contributed",
+                help=f"Projected TFSA value at end of {latest_year}, including all growth and contributions"
+            )
+        
+        with col3:
+            st.metric(
+                "Total Tax Shield Value",
+                f"${total_tax_shield:,.0f}",
+                help="Cumulative tax refunds generated from all RRSP contributions across tracked years"
+            )
+        
+        with col4:
+            growth_rate_pct = (total_investment_growth / max(1, total_contributions)) * 100 if total_contributions > 0 else 0
+            st.metric(
+                "Total Portfolio Value",
+                f"${total_portfolio_value:,.0f}",
+                delta=f"+${total_investment_growth:,.0f} growth ({growth_rate_pct:.1f}%)",
+                help=f"Combined RRSP + TFSA value. Growth represents investment returns above your ${total_contributions:,.0f} total contributions"
+            )
+        
+        # Detailed explanation in expander
+        with st.expander("📊 Understanding Your Global Wealth Summary", expanded=False):
+            st.markdown(f"""
+            This dashboard shows your complete retirement portfolio snapshot as of **December {latest_year}** (end of the most recent year you've planned):
+            
+            **⏰ Important Note About Tax Year Optimization:**
+            When optimizing for a specific tax year (e.g., 2025), remember that **RRSP contributions can be claimed until the CRA deadline** - typically the end of February or early March of the following year. This means:
+            - **Tax Year 2025** includes all RRSP contributions made from January 1, 2025 through approximately **March 1, 2026**
+            - You have the first ~60 days of the new year to finalize your RRSP strategy for the previous tax year
+            - Tax optimization typically happens before the end of February, giving you extra time to maximize deductions
+            
+            ---
+            
+            **💰 Current RRSP Balance: ${latest_rrsp_balance:,.0f}**
+            - This is your projected RRSP account value at the end of {latest_year}
+            - Includes all contributions from all years you've tracked: ${total_rrsp_all:,.0f}
+            - Includes compound investment growth based on your target CAGR settings
+            - This money is tax-deferred (you'll pay tax when you withdraw in retirement)
+            
+            **🌱 Current TFSA Balance: ${latest_tfsa_balance:,.0f}**
+            - This is your projected TFSA account value at the end of {latest_year}
+            - Includes all contributions from all years you've tracked: ${total_tfsa_all:,.0f}
+            - Includes compound investment growth based on your target CAGR settings
+            - This money grows 100% tax-free (no tax when you withdraw, ever!)
+            
+            **🛡️ Total Tax Shield Value: ${total_tax_shield:,.0f}**
+            - This is the total amount of tax refunds you've generated through RRSP contributions
+            - Every dollar you contribute to RRSP saves taxes at your marginal rate
+            - Example: If you're in the 33.89% bracket, a $10,000 RRSP contribution saves $3,389 in taxes
+            - This is "free money" from the government that you can reinvest (ideally into TFSA)
+            
+            **💎 Total Portfolio Value: ${total_portfolio_value:,.0f}**
+            - This is your combined RRSP + TFSA wealth: ${latest_rrsp_balance:,.0f} + ${latest_tfsa_balance:,.0f}
+            - You've contributed a total of ${total_contributions:,.0f} across all years
+            - Your investments have grown by ${total_investment_growth:,.0f} ({growth_rate_pct:.1f}% return on your contributions)
+            - This growth comes from compound investment returns over time
+            - **Bottom line**: You put in ${total_contributions:,.0f}, and it's now worth ${total_portfolio_value:,.0f}!
+            """)
+        
+        st.divider()
+    
+    # SECTION 2: INVESTMENT SNAPSHOT WORKSHEET
+    st.markdown("## 📊 Investment Snapshot Worksheet")
+    st.markdown("Track your actual account balances across institutions. This data is saved locally in your browser and does not affect tax calculations.")
     
     components.html("""
     <!DOCTYPE html>
@@ -321,20 +458,20 @@ if st.session_state.current_page == "Home":
             }
             
             body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-                background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
-                padding: 20px;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                background: transparent;
+                padding: 10px;
             }
             
             .worksheet-container {
-                max-width: 1200px;
+                max-width: 100%;
                 margin: 0 auto;
             }
             
             .tables-wrapper {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 20px;
+                gap: 24px;
                 margin-bottom: 20px;
             }
             
@@ -344,44 +481,52 @@ if st.session_state.current_page == "Home":
                 }
             }
             
+            /* Match Streamlit premium-card style */
             .account-section {
                 background: white;
-                border-radius: 12px;
-                padding: 20px;
+                padding: 24px;
+                border-radius: 16px;
                 box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                border: 1px solid #e2e8f0;
+                transition: all 0.3s ease;
+            }
+            
+            .account-section:hover {
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
             }
             
             .account-section.rrsp {
-                border-top: 4px solid #3b82f6;
+                border-left: 4px solid #3b82f6;
             }
             
             .account-section.tfsa {
-                border-top: 4px solid #10b981;
+                border-left: 4px solid #10b981;
             }
             
             .section-header {
                 display: flex;
                 align-items: center;
-                margin-bottom: 15px;
-                padding-bottom: 10px;
+                margin-bottom: 20px;
+                padding-bottom: 12px;
                 border-bottom: 2px solid #e2e8f0;
             }
             
             .section-icon {
-                font-size: 24px;
-                margin-right: 10px;
+                font-size: 28px;
+                margin-right: 12px;
             }
             
             .section-title {
-                font-size: 18px;
+                font-size: 20px;
                 font-weight: 600;
                 color: #1e293b;
+                flex-grow: 1;
             }
             
             table {
                 width: 100%;
                 border-collapse: collapse;
-                margin-bottom: 10px;
+                margin-bottom: 12px;
             }
             
             thead {
@@ -389,28 +534,34 @@ if st.session_state.current_page == "Home":
             }
             
             th {
-                padding: 12px 8px;
+                padding: 12px 10px;
                 text-align: left;
                 font-weight: 600;
-                font-size: 13px;
-                color: #475569;
+                font-size: 12px;
+                color: #64748b;
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
                 border-bottom: 2px solid #cbd5e1;
             }
             
             td {
-                padding: 10px 8px;
+                padding: 12px 10px;
                 border-bottom: 1px solid #e2e8f0;
             }
             
             input[type="text"], input[type="number"], input[type="date"] {
                 width: 100%;
-                padding: 8px;
-                border: 1px solid #cbd5e1;
-                border-radius: 6px;
+                padding: 10px;
+                border: 1.5px solid #cbd5e1;
+                border-radius: 8px;
                 font-size: 14px;
-                transition: all 0.2s;
+                font-family: inherit;
+                transition: all 0.2s ease;
+                background: white;
+            }
+            
+            input[type="text"]:hover, input[type="number"]:hover, input[type="date"]:hover {
+                border-color: #94a3b8;
             }
             
             input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
@@ -422,76 +573,93 @@ if st.session_state.current_page == "Home":
             .total-row {
                 background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
                 font-weight: 600;
-                border-top: 2px solid #3b82f6;
+                border-top: 3px solid #3b82f6;
             }
             
             .total-row td {
-                padding: 14px 8px;
+                padding: 16px 10px;
                 border-bottom: none;
             }
             
             .total-label {
                 color: #1e40af;
                 font-size: 15px;
+                font-weight: 700;
             }
             
             .total-amount {
                 color: #1e40af;
-                font-size: 16px;
+                font-size: 18px;
+                font-weight: 700;
             }
             
             .btn {
-                padding: 8px 16px;
+                padding: 10px 18px;
                 border: none;
-                border-radius: 6px;
+                border-radius: 8px;
                 font-size: 14px;
-                font-weight: 500;
+                font-weight: 600;
                 cursor: pointer;
-                transition: all 0.2s;
-                margin-right: 8px;
+                transition: all 0.2s ease;
+                margin-right: 10px;
+                font-family: inherit;
             }
             
             .btn-add {
                 background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
                 color: white;
+                box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
             }
             
             .btn-add:hover {
                 background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-                transform: translateY(-1px);
-                box-shadow: 0 4px 6px rgba(59, 130, 246, 0.4);
+                transform: translateY(-2px);
+                box-shadow: 0 6px 12px rgba(59, 130, 246, 0.4);
+            }
+            
+            .btn-add:active {
+                transform: translateY(0);
             }
             
             .btn-remove {
                 background: #ef4444;
                 color: white;
-                font-size: 12px;
-                padding: 4px 8px;
+                font-size: 13px;
+                padding: 6px 10px;
+                border-radius: 6px;
             }
             
             .btn-remove:hover {
                 background: #dc2626;
+                transform: scale(1.05);
             }
             
             .actions {
-                margin-top: 10px;
+                margin-top: 16px;
             }
             
             .saved-indicator {
-                display: inline-block;
-                padding: 4px 12px;
-                background: #d1fae5;
+                display: inline-flex;
+                align-items: center;
+                padding: 6px 14px;
+                background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
                 color: #065f46;
-                border-radius: 4px;
-                font-size: 12px;
-                font-weight: 500;
-                margin-left: 10px;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 600;
                 opacity: 0;
-                transition: opacity 0.3s;
+                transition: opacity 0.3s ease;
+                box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
             }
             
             .saved-indicator.show {
                 opacity: 1;
+            }
+            
+            .saved-indicator::before {
+                content: "✓";
+                margin-right: 6px;
+                font-size: 16px;
             }
         </style>
     </head>
@@ -503,7 +671,7 @@ if st.session_state.current_page == "Home":
                     <div class="section-header">
                         <span class="section-icon">💼</span>
                         <span class="section-title">RRSP Accounts</span>
-                        <span class="saved-indicator" id="rrsp-saved">✓ Saved</span>
+                        <span class="saved-indicator" id="rrsp-saved">Saved</span>
                     </div>
                     <table id="rrsp-table">
                         <thead>
@@ -534,7 +702,7 @@ if st.session_state.current_page == "Home":
                     <div class="section-header">
                         <span class="section-icon">🌱</span>
                         <span class="section-title">TFSA Accounts</span>
-                        <span class="saved-indicator" id="tfsa-saved">✓ Saved</span>
+                        <span class="saved-indicator" id="tfsa-saved">Saved</span>
                     </div>
                     <table id="tfsa-table">
                         <thead>
@@ -657,336 +825,33 @@ if st.session_state.current_page == "Home":
         </script>
     </body>
     </html>
-    """, height=500)
+    """, height=520)
     
-    st.divider()
-    
-    # TFSA Important Information
-    st.markdown("### 💡 Important TFSA Information")
-    st.info("""
-    **📋 TFSA Contribution Room Updates from CRA:**
-    
-    - **Reporting Timeline:** Financial institutions must submit your prior year TFSA records to CRA by the last day of February each year. Your contribution room will be updated once this information is received and processed.
-    
-    - **Current Year Exclusion:** Your contribution room calculation is based on transactions made on or before December 31 of the prior year. Transactions made in the current year are NOT yet included.
-    
-    - **Verify Your Records:** Compare the TFSA transaction information from CRA with your own records to ensure accuracy. Use the Investment Snapshot Worksheet above to track your actual balances.
-    
-    - **Room May Change:** Your TFSA contribution room could change if CRA receives new or additional information from your financial institution(s).
-    
-    - **Excess Contributions:** Any contributions made at any time in a month over your available contribution room is an excess contribution. You will be liable to a **1% monthly tax** on your highest excess TFSA amount until you remove it.
-    
-    - **Non-Resident Contributions:** If you make contributions after you cease to be a resident of Canada, you may have to pay a tax on those contributions. For more information, visit [Tax payable on TFSAs - Canada.ca](https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/tax-free-savings-account/tax-payable-on-tfsas.html).
-    
-    ⚠️ **Pro Tip:** Always maintain your own records and compare them with CRA's information to avoid accidental over-contributions and penalties.
-    """)
-    
-    st.divider()
-    
-    # Global Net Worth Summary
-    if all_history:
-        st.markdown("### 💎 Global Wealth Summary")
+    # TFSA Information in Expander
+    with st.expander("💡 Important TFSA Contribution Room Information", expanded=False):
+        st.markdown("""
+        **📋 Understanding CRA TFSA Contribution Room Updates:**
         
-        description_box(
-            "Portfolio Overview",
-            "Your complete financial snapshot showing current balances, lifetime contributions, and tax efficiency gains across all tracked years. "
-            "These values represent your projected end-of-year portfolio positions based on your target CAGR."
-        )
+        - **Reporting Timeline:** Financial institutions must submit your prior year TFSA records to CRA by the last day of February each year. Your contribution room will be updated once this information is received and processed.
         
-        total_rrsp_all = 0
-        total_tfsa_all = 0
-        total_tax_shield = 0
-        total_contributions = 0
-        total_investment_growth = 0
+        - **Current Year Exclusion:** Your contribution room calculation is based on transactions made on or before December 31 of the prior year. Transactions made in the current year are NOT yet included.
         
-        # Get the latest year's ending balance
-        latest_year = max(all_history.keys(), key=lambda x: int(x))
-        latest_data = all_history[latest_year]
+        - **Verify Your Records:** Compare the TFSA transaction information from CRA with your own records to ensure accuracy. Use the Investment Snapshot Worksheet above to track your actual balances.
         
-        for yr, data in all_history.items():
-            t4_gross = data.get('t4_gross_income', 0)
-            other_inc = data.get('other_income', 0)
-            total_gross = t4_gross + other_inc
-            
-            # Use helper function for RRSP calculation
-            annual_rrsp = calculate_annual_rrsp(data)
-            tfsa_contrib = data.get('tfsa_lump_sum', 0)
-            
-            total_rrsp_all += annual_rrsp
-            total_tfsa_all += tfsa_contrib
-            total_contributions += annual_rrsp + tfsa_contrib
-            
-            # Calculate tax shield value
-            refund = calculate_tax_refund(total_gross, annual_rrsp)
-            total_tax_shield += refund
+        - **Room May Change:** Your TFSA contribution room could change if CRA receives new or additional information from your financial institution(s).
         
-        # Get projected balances from latest year
-        if latest_data:
-            target_cagr = latest_data.get("target_cagr", 7.0) / 100
-            rrsp_start = latest_data.get("rrsp_balance_start", 0)
-            tfsa_start = latest_data.get("tfsa_balance_start", 0)
-            
-            # Use helper function for RRSP calculation
-            annual_rrsp = calculate_annual_rrsp(latest_data)
-            tfsa_contrib = latest_data.get('tfsa_lump_sum', 0)
-            
-            # Calculate end of year balances (growth + new contributions)
-            rrsp_growth = rrsp_start * target_cagr + annual_rrsp * (target_cagr / 2)
-            tfsa_growth = tfsa_start * target_cagr + tfsa_contrib * (target_cagr / 2)
-            
-            latest_rrsp_balance = rrsp_start + rrsp_growth + annual_rrsp
-            latest_tfsa_balance = tfsa_start + tfsa_growth + tfsa_contrib
-            
-            total_portfolio_value = latest_rrsp_balance + latest_tfsa_balance
-            total_investment_growth = total_portfolio_value - total_contributions
-        else:
-            latest_rrsp_balance = 0
-            latest_tfsa_balance = 0
-            total_portfolio_value = 0
+        - **Excess Contributions:** Any contributions made at any time in a month over your available contribution room is an excess contribution. You will be liable to a **1% monthly tax** on your highest excess TFSA amount until you remove it.
         
-        col1, col2, col3, col4 = st.columns(4)
+        - **Non-Resident Contributions:** If you make contributions after you cease to be a resident of Canada, you may have to pay a tax on those contributions. For more information, visit [Tax payable on TFSAs - Canada.ca](https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/tax-free-savings-account/tax-payable-on-tfsas.html).
         
-        with col1:
-            st.metric(
-                "Current RRSP Balance",
-                f"${latest_rrsp_balance:,.0f}",
-                delta=f"${total_rrsp_all:,.0f} contributed",
-                help=f"Projected RRSP value at end of {latest_year}, including all growth and contributions"
-            )
-        
-        with col2:
-            st.metric(
-                "Current TFSA Balance",
-                f"${latest_tfsa_balance:,.0f}",
-                delta=f"${total_tfsa_all:,.0f} contributed",
-                help=f"Projected TFSA value at end of {latest_year}, including all growth and contributions"
-            )
-        
-        with col3:
-            st.metric(
-                "Total Tax Shield Value",
-                f"${total_tax_shield:,.0f}",
-                help="Cumulative tax refunds generated from all RRSP contributions across tracked years"
-            )
-        
-        with col4:
-            growth_rate_pct = (total_investment_growth / max(1, total_contributions)) * 100 if total_contributions > 0 else 0
-            st.metric(
-                "Total Portfolio Value",
-                f"${total_portfolio_value:,.0f}",
-                delta=f"+${total_investment_growth:,.0f} growth ({growth_rate_pct:.1f}%)",
-                help=f"Combined RRSP + TFSA value. Growth represents investment returns above your ${total_contributions:,.0f} total contributions"
-            )
-        
-        # Detailed explanation for Global Wealth Summary
-        st.markdown("---")
-        st.markdown("#### 📖 Understanding Your Global Wealth Summary")
-        st.markdown(f"""
-        This dashboard shows your complete retirement portfolio snapshot as of **December {latest_year}** (end of the most recent year you've planned):
-        
-        **⏰ Important Note About Tax Year Optimization:**
-        When optimizing for a specific tax year (e.g., 2025), remember that **RRSP contributions can be claimed until the CRA deadline** - typically the end of February or early March of the following year. This means:
-        - **Tax Year 2025** includes all RRSP contributions made from January 1, 2025 through approximately **March 1, 2026**
-        - You have the first ~60 days of the new year to finalize your RRSP strategy for the previous tax year
-        - Tax optimization typically happens before the end of February, giving you extra time to maximize deductions
-        
-        ---
-        
-        **💰 Current RRSP Balance: ${latest_rrsp_balance:,.0f}**
-        - This is your projected RRSP account value at the end of {latest_year}
-        - Includes all contributions from all years you've tracked: ${total_rrsp_all:,.0f}
-        - Includes compound investment growth based on your target CAGR settings
-        - This money is tax-deferred (you'll pay tax when you withdraw in retirement)
-        
-        **🌱 Current TFSA Balance: ${latest_tfsa_balance:,.0f}**
-        - This is your projected TFSA account value at the end of {latest_year}
-        - Includes all contributions from all years you've tracked: ${total_tfsa_all:,.0f}
-        - Includes compound investment growth based on your target CAGR settings
-        - This money grows 100% tax-free (no tax when you withdraw, ever!)
-        
-        **🛡️ Total Tax Shield Value: ${total_tax_shield:,.0f}**
-        - This is the total amount of tax refunds you've generated through RRSP contributions
-        - Every dollar you contribute to RRSP saves taxes at your marginal rate
-        - Example: If you're in the 33.89% bracket, a $10,000 RRSP contribution saves $3,389 in taxes
-        - This is "free money" from the government that you can reinvest (ideally into TFSA)
-        
-        **💎 Total Portfolio Value: ${total_portfolio_value:,.0f}**
-        - This is your combined RRSP + TFSA wealth: ${latest_rrsp_balance:,.0f} + ${latest_tfsa_balance:,.0f}
-        - You've contributed a total of ${total_contributions:,.0f} across all years
-        - Your investments have grown by ${total_investment_growth:,.0f} ({growth_rate_pct:.1f}% return on your contributions)
-        - This growth comes from compound investment returns over time
-        - **Bottom line**: You put in ${total_contributions:,.0f}, and it's now worth ${total_portfolio_value:,.0f}!
+        ⚠️ **Pro Tip:** Always maintain your own records and compare them with CRA's information to avoid accidental over-contributions and penalties.
         """)
-        
-        st.divider()
-        
-        # Multi-Year Portfolio Growth Chart
-        st.markdown("### 📈 Portfolio Growth Over Time")
-        
-        description_box(
-            "Wealth Trajectory Visualization",
-            "Track your portfolio's evolution across time. Each year shows two data points: January (start) and December (end). "
-            "The stacked areas show how your RRSP (blue) and TFSA (green) accounts grow through contributions and investment returns."
-        )
-        
-        portfolio_history = []
-        
-        for yr in sorted(all_history.keys(), key=lambda x: int(x)):
-            data = all_history[yr]
-            
-            target_cagr = data.get("target_cagr", 7.0) / 100
-            rrsp_start = data.get("rrsp_balance_start", 0)
-            tfsa_start = data.get("tfsa_balance_start", 0)
-            
-            # Use helper function for RRSP calculation
-            annual_rrsp = calculate_annual_rrsp(data)
-            tfsa_contrib = data.get('tfsa_lump_sum', 0)
-            
-            # Start of year
-            portfolio_history.append({
-                "Year": f"{yr} (Jan)",
-                "RRSP Balance": rrsp_start,
-                "TFSA Balance": tfsa_start,
-                "Total": rrsp_start + tfsa_start
-            })
-            
-            # End of year (with growth and contributions)
-            rrsp_growth = rrsp_start * target_cagr + annual_rrsp * (target_cagr / 2)
-            tfsa_growth = tfsa_start * target_cagr + tfsa_contrib * (target_cagr / 2)
-            
-            rrsp_end = rrsp_start + rrsp_growth + annual_rrsp
-            tfsa_end = tfsa_start + tfsa_growth + tfsa_contrib
-            
-            portfolio_history.append({
-                "Year": f"{yr} (Dec)",
-                "RRSP Balance": rrsp_end,
-                "TFSA Balance": tfsa_end,
-                "Total": rrsp_end + tfsa_end
-            })
-        
-        if portfolio_history:
-            df_portfolio = pd.DataFrame(portfolio_history)
-            
-            # Stacked area chart for portfolio composition
-            portfolio_melted = df_portfolio[['Year', 'RRSP Balance', 'TFSA Balance']].melt(
-                'Year',
-                var_name='Account',
-                value_name='Balance'
-            )
-            
-            portfolio_chart = alt.Chart(portfolio_melted).mark_area(
-                opacity=0.8,
-                line=True
-            ).encode(
-                x=alt.X('Year:N', title='Timeline', axis=alt.Axis(labelAngle=-45)),
-                y=alt.Y('Balance:Q', title='Portfolio Value ($)', stack='zero'),
-                color=alt.Color('Account:N',
-                    scale=alt.Scale(
-                        domain=['RRSP Balance', 'TFSA Balance'],
-                        range=['#3b82f6', '#10b981']
-                    ),
-                    legend=alt.Legend(title="Account Type")
-                ),
-                tooltip=[
-                    alt.Tooltip('Year:N', title='Period'),
-                    alt.Tooltip('Account:N', title='Account'),
-                    alt.Tooltip('Balance:Q', title='Balance', format='$,.0f')
-                ]
-            ).properties(height=400)
-            
-            st.altair_chart(portfolio_chart, use_container_width=True)
-            
-            st.markdown("---")
-            st.markdown("#### 📖 How to Read Your Portfolio Growth Chart")
-            st.markdown("""
-            This stacked area chart shows how your retirement portfolio has grown over time. Here's what you're seeing:
-            
-            **📊 The Colored Areas:**
-            - **Blue area (bottom)**: Your RRSP account balance over time
-            - **Green area (top)**: Your TFSA account balance stacked on top
-            - **Total height**: Your complete portfolio value (RRSP + TFSA combined)
-            
-            **📅 The Timeline (X-Axis):**
-            - Each year appears TWICE: once for January (start of year) and once for December (end of year)
-            - **January markers**: Show your portfolio value on January 1st, before making any new contributions that year
-            - **December markers**: Show your portfolio value on December 31st, after all contributions and investment growth
-            
-            **📈 What the Growth Represents:**
-            - **Vertical jumps from Jan → Dec**: This is your contributions PLUS investment returns for that year
-            - **Vertical jumps from Dec → next Jan**: Usually flat (representing year rollover)
-            - **Overall upward slope**: Shows your wealth-building momentum over multiple years
-            
-            **💡 Key Insights to Look For:**
-            1. **Steeper slopes** = faster wealth accumulation (higher contributions or better returns)
-            2. **Blue getting bigger** = RRSP growing (tax-deferred, good for retirement)
-            3. **Green getting bigger** = TFSA growing (tax-free, good for any goal)
-            4. **Consistent pattern** = disciplined, systematic saving (the best path to wealth)
-            
-            **🎯 Example Reading:**
-            - If you see a big jump from 2025 Dec to 2026 Dec, that means you made significant contributions in 2026 AND/OR had strong investment returns
-            - If the chart is mostly blue, you're focusing on tax-deferred RRSP savings
-            - If the chart has more green, you're prioritizing tax-free TFSA growth
-            - The ideal strategy typically uses BOTH accounts strategically
-            """)
-            
-            # Summary stats
-            col_stats1, col_stats2, col_stats3 = st.columns(3)
-            
-            st.markdown("#### 📊 Portfolio Performance Metrics")
-            st.markdown("""
-                These metrics summarize your portfolio's performance across all tracked years:
-                - **Total Growth**: Dollar amount your portfolio has grown beyond contributions
-                - **Annualized Return (CAGR)**: Your average annual return rate - compare this to your target CAGR
-                - **Years Tracked**: How many years of data you've entered for analysis
-            """)
-            
-            first_total = df_portfolio.iloc[0]['Total']
-            last_total = df_portfolio.iloc[-1]['Total']
-            total_return = last_total - first_total
-            total_return_pct = (total_return / max(1, first_total)) * 100 if first_total > 0 else 0
-            
-            # Calculate actual time span (from first Jan to last Dec)
-            first_year = int(df_portfolio.iloc[0]['Year'].split()[0])
-            last_year = int(df_portfolio.iloc[-1]['Year'].split()[0])
-            years_span = last_year - first_year + 1  # Include both start and end year
-            
-            with col_stats1:
-                st.metric(
-                    "Total Growth",
-                    f"${total_return:,.0f}",
-                    delta=f"+{total_return_pct:.1f}%",
-                    help=f"Portfolio growth from {first_year} to {last_year}"
-                )
-            
-            with col_stats2:
-                # CAGR formula: ((Ending Value / Beginning Value)^(1/years)) - 1
-                annualized_return = ((last_total / max(1, first_total)) ** (1 / max(1, years_span)) - 1) * 100 if first_total > 0 and years_span > 0 else 0
-                st.metric(
-                    "Annualized Return (CAGR)",
-                    f"{annualized_return:.2f}%",
-                    help=f"Compound annual growth rate over {years_span} year{'s' if years_span != 1 else ''}"
-                )
-            
-            with col_stats3:
-                st.metric(
-                    "Years Tracked",
-                    f"{len(all_history)}",
-                    help="Number of years with saved data"
-                )
-        
-        st.divider()
     
-    # Planning Years Grid
-    st.markdown("### 📅 Planning Years")
+    st.divider()
     
-    description_box(
-        "Year-by-Year Strategy Navigator",
-        "Select any year to view detailed tax optimization strategies. Each tile shows optimization status: "
-        "Empty years need data entry, In Progress years need additional RRSP contributions to avoid high tax brackets, "
-        "and Optimized years have achieved maximum tax efficiency."
-    )
+    # SECTION 3: PLANNING YEARS
+    st.markdown("## 📅 Planning Years")
     
-    # Status Legend
     st.markdown("""
         <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
             <strong>📊 Year Status Legend:</strong>
@@ -1113,10 +978,159 @@ if st.session_state.current_page == "Home":
                 
                 st.markdown('</div>', unsafe_allow_html=True)
     
+    # SECTION 4: PORTFOLIO TRAJECTORY & ANALYTICS (Moved to Bottom)
+    if all_history:
+        st.divider()
+        st.markdown("## 📈 Portfolio Growth Over Time")
+        
+        description_box(
+            "Wealth Trajectory Visualization",
+            "Track your portfolio's evolution across time. Each year shows two data points: January (start) and December (end). "
+            "The stacked areas show how your RRSP (blue) and TFSA (green) accounts grow through contributions and investment returns."
+        )
+        
+        portfolio_history = []
+        
+        for yr in sorted(all_history.keys(), key=lambda x: int(x)):
+            data = all_history[yr]
+            
+            target_cagr = data.get("target_cagr", 7.0) / 100
+            rrsp_start = data.get("rrsp_balance_start", 0)
+            tfsa_start = data.get("tfsa_balance_start", 0)
+            
+            # Use helper function for RRSP calculation
+            annual_rrsp = calculate_annual_rrsp(data)
+            tfsa_contrib = data.get('tfsa_lump_sum', 0)
+            
+            # Start of year
+            portfolio_history.append({
+                "Year": f"{yr} (Jan)",
+                "RRSP Balance": rrsp_start,
+                "TFSA Balance": tfsa_start,
+                "Total": rrsp_start + tfsa_start
+            })
+            
+            # End of year (with growth and contributions)
+            rrsp_growth = rrsp_start * target_cagr + annual_rrsp * (target_cagr / 2)
+            tfsa_growth = tfsa_start * target_cagr + tfsa_contrib * (target_cagr / 2)
+            
+            rrsp_end = rrsp_start + rrsp_growth + annual_rrsp
+            tfsa_end = tfsa_start + tfsa_growth + tfsa_contrib
+            
+            portfolio_history.append({
+                "Year": f"{yr} (Dec)",
+                "RRSP Balance": rrsp_end,
+                "TFSA Balance": tfsa_end,
+                "Total": rrsp_end + tfsa_end
+            })
+        
+        if portfolio_history:
+            df_portfolio = pd.DataFrame(portfolio_history)
+            
+            # Stacked area chart for portfolio composition
+            portfolio_melted = df_portfolio[['Year', 'RRSP Balance', 'TFSA Balance']].melt(
+                'Year',
+                var_name='Account',
+                value_name='Balance'
+            )
+            
+            portfolio_chart = alt.Chart(portfolio_melted).mark_area(
+                opacity=0.8,
+                line=True
+            ).encode(
+                x=alt.X('Year:N', title='Timeline', axis=alt.Axis(labelAngle=-45)),
+                y=alt.Y('Balance:Q', title='Portfolio Value ($)', stack='zero'),
+                color=alt.Color('Account:N',
+                    scale=alt.Scale(
+                        domain=['RRSP Balance', 'TFSA Balance'],
+                        range=['#3b82f6', '#10b981']
+                    ),
+                    legend=alt.Legend(title="Account Type")
+                ),
+                tooltip=[
+                    alt.Tooltip('Year:N', title='Period'),
+                    alt.Tooltip('Account:N', title='Account'),
+                    alt.Tooltip('Balance:Q', title='Balance', format='$,.0f')
+                ]
+            ).properties(height=400)
+            
+            st.altair_chart(portfolio_chart, use_container_width=True)
+            
+            # Chart explanation in expander
+            with st.expander("📖 How to Read Your Portfolio Growth Chart", expanded=False):
+                st.markdown("""
+                This stacked area chart shows how your retirement portfolio has grown over time. Here's what you're seeing:
+                
+                **📊 The Colored Areas:**
+                - **Blue area (bottom)**: Your RRSP account balance over time
+                - **Green area (top)**: Your TFSA account balance stacked on top
+                - **Total height**: Your complete portfolio value (RRSP + TFSA combined)
+                
+                **📅 The Timeline (X-Axis):**
+                - Each year appears TWICE: once for January (start of year) and once for December (end of year)
+                - **January markers**: Show your portfolio value on January 1st, before making any new contributions that year
+                - **December markers**: Show your portfolio value on December 31st, after all contributions and investment growth
+                
+                **📈 What the Growth Represents:**
+                - **Vertical jumps from Jan → Dec**: This is your contributions PLUS investment returns for that year
+                - **Vertical jumps from Dec → next Jan**: Usually flat (representing year rollover)
+                - **Overall upward slope**: Shows your wealth-building momentum over multiple years
+                
+                **💡 Key Insights to Look For:**
+                1. **Steeper slopes** = faster wealth accumulation (higher contributions or better returns)
+                2. **Blue getting bigger** = RRSP growing (tax-deferred, good for retirement)
+                3. **Green getting bigger** = TFSA growing (tax-free, good for any goal)
+                4. **Consistent pattern** = disciplined, systematic saving (the best path to wealth)
+                
+                **🎯 Example Reading:**
+                - If you see a big jump from 2025 Dec to 2026 Dec, that means you made significant contributions in 2026 AND/OR had strong investment returns
+                - If the chart is mostly blue, you're focusing on tax-deferred RRSP savings
+                - If the chart has more green, you're prioritizing tax-free TFSA growth
+                - The ideal strategy typically uses BOTH accounts strategically
+                """)
+            
+            # Summary stats
+            col_stats1, col_stats2, col_stats3 = st.columns(3)
+            
+            first_total = df_portfolio.iloc[0]['Total']
+            last_total = df_portfolio.iloc[-1]['Total']
+            total_return = last_total - first_total
+            total_return_pct = (total_return / max(1, first_total)) * 100 if first_total > 0 else 0
+            
+            # Calculate actual time span (from first Jan to last Dec)
+            first_year = int(df_portfolio.iloc[0]['Year'].split()[0])
+            last_year = int(df_portfolio.iloc[-1]['Year'].split()[0])
+            years_span = last_year - first_year + 1  # Include both start and end year
+            
+            with col_stats1:
+                st.metric(
+                    "Total Growth",
+                    f"${total_return:,.0f}",
+                    delta=f"+{total_return_pct:.1f}%",
+                    help=f"Portfolio growth from {first_year} to {last_year}"
+                )
+            
+            with col_stats2:
+                # CAGR formula: ((Ending Value / Beginning Value)^(1/years)) - 1
+                annualized_return = ((last_total / max(1, first_total)) ** (1 / max(1, years_span)) - 1) * 100 if first_total > 0 and years_span > 0 else 0
+                st.metric(
+                    "Annualized Return (CAGR)",
+                    f"{annualized_return:.2f}%",
+                    help=f"Compound annual growth rate over {years_span} year{'s' if years_span != 1 else ''}"
+                )
+            
+            with col_stats3:
+                st.metric(
+                    "Years Tracked",
+                    f"{len(all_history)}",
+                    help="Number of years with saved data"
+                )
+        
+        st.divider()
+    
     # Multi-Year Analytics
     if all_history and len(all_history) > 1:
-        st.divider()
-        st.markdown("### 📈 Multi-Year Analytics & Trends")
+        st.markdown("## 📊 Multi-Year Analytics & Trends")
         
         description_box(
             "Comparative Analysis Dashboard",
@@ -1192,14 +1206,7 @@ if st.session_state.current_page == "Home":
         df_burndown = pd.DataFrame(burndown_data)
         
         # RRSP & TFSA Burndown Charts
-        st.markdown("**Contribution Room Burndown Analysis**")
-        
-        description_box(
-            "Room Utilization Efficiency",
-            "These stacked bar charts show how much of your available contribution room you're actually using each year. "
-            "Green/Blue represents room you've used (good!), gray shows unused room (opportunity cost). "
-            "Higher utilization percentages mean you're maximizing your tax-advantaged space."
-        )
+        st.markdown("### 📉 Contribution Room Burndown Analysis")
         
         col_burn1, col_burn2 = st.columns(2)
         
@@ -1226,14 +1233,6 @@ if st.session_state.current_page == "Home":
             ).properties(height=320)
             
             st.altair_chart(rrsp_chart, use_container_width=True)
-            
-            st.markdown("**📖 Understanding This Chart:**")
-            st.markdown("""
-                - **Green bars**: RRSP room you've used (contributions made)
-                - **Gray bars**: RRSP room left unused (missed opportunity)
-                - **Taller green = better**: You're maximizing tax-advantaged space
-                - **Goal**: Minimize gray, maximize green for optimal tax efficiency
-            """)
             
             # Calculate average utilization
             total_used = rrsp_burndown[rrsp_burndown['Status'] == 'Used']['Amount'].sum()
@@ -1265,14 +1264,6 @@ if st.session_state.current_page == "Home":
             
             st.altair_chart(tfsa_chart, use_container_width=True)
             
-            st.markdown("**📖 Understanding This Chart:**")
-            st.markdown("""
-                - **Blue bars**: TFSA room you've used (contributions made)
-                - **Gray bars**: TFSA room left unused (missed opportunity)
-                - **Why it matters**: Unused TFSA room accumulates, but you miss years of tax-free growth
-                - **Strategy tip**: Deploy your RRSP tax refunds here for compounding tax-free returns
-            """)
-            
             # Calculate average utilization
             total_used = tfsa_burndown[tfsa_burndown['Status'] == 'Used']['Amount'].sum()
             total_available = tfsa_burndown['Amount'].sum()
@@ -1285,13 +1276,6 @@ if st.session_state.current_page == "Home":
         
         with col_left:
             st.markdown("**Income vs. Tax-Shielded Income**")
-            
-            description_box(
-                "Tax Efficiency Comparison",
-                "This side-by-side bar chart compares your gross income (what you earned) against your taxable income (what you pay tax on). "
-                "The difference represents income you've successfully shielded from taxes using RRSP contributions. "
-                "Bigger gaps mean more tax savings!"
-            )
             
             income_df = df_chart[['Year', 'Gross Income', 'Taxable Income']].melt(
                 'Year',
@@ -1313,25 +1297,9 @@ if st.session_state.current_page == "Home":
             ).properties(height=320)
             
             st.altair_chart(income_chart, use_container_width=True)
-            
-            st.markdown("**📖 Understanding This Chart:**")
-            st.markdown("""
-                - **Gray bars**: Your total gross income (before RRSP deductions)
-                - **Blue bars**: Your taxable income (after RRSP deductions)
-                - **The gap between bars**: Amount you've shielded from taxes
-                - **Bigger gap = bigger tax savings**: More income protected at your marginal rate
-                - **Goal**: Keep blue bars below $181,440 to avoid 47.97% Penthouse bracket
-            """)
         
         with col_right:
             st.markdown("**Remaining Room Trajectory**")
-            
-            description_box(
-                "Year-End Room Availability",
-                "This chart shows how much contribution room you have left at the END of each year, after all contributions. "
-                "Room doesn't disappear - it carries forward! But leaving room unused means missing years of tax-advantaged growth. "
-                "Downward trends are normal as you consume room, but CRA adds new room each year."
-            )
             
             room_chart = alt.Chart(df_room).mark_area(
                 opacity=0.7,
@@ -1351,15 +1319,7 @@ if st.session_state.current_page == "Home":
             st.altair_chart(room_chart, use_container_width=True)
         
         # Contribution trends
-        st.markdown("**Annual Contribution Trends**")
-        
-        description_box(
-            "Contribution Consistency Analysis",
-            "This line chart tracks your yearly contribution amounts for both RRSP and TFSA. "
-            "**Look for**: (1) Upward trends as income grows, (2) Consistent patterns showing disciplined saving, "
-            "(3) Gaps where you might have missed opportunities. "
-            "Steady or increasing contributions build long-term wealth through compound growth."
-        )
+        st.markdown("### 📊 Annual Contribution Trends")
         
         contrib_df = df_chart[['Year', 'RRSP', 'TFSA']].melt(
             'Year',
@@ -1382,7 +1342,6 @@ if st.session_state.current_page == "Home":
         ).properties(height=300)
         
         st.altair_chart(contrib_chart, use_container_width=True)
-
 # --- 6. PAGE: YEAR VIEW ---
 else:
     selected_year = st.session_state.selected_year
