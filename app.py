@@ -1080,7 +1080,7 @@ else:
             rrsp_lump_sum_optimization = st.number_input(
                 "RRSP Lump Sum (Tax Optimization)",
                 value=float(year_data.get("rrsp_lump_sum_optimization", 0)),
-                step=1000.0,
+                step=100.0,
                 min_value=0.0,
                 help="Strategic deposit to optimize tax bracket positioning"
             )
@@ -1088,7 +1088,7 @@ else:
             rrsp_lump_sum_additional = st.number_input(
                 "RRSP Lump Sum (Additional Refund)",
                 value=float(year_data.get("rrsp_lump_sum_additional", 0)),
-                step=1000.0,
+                step=100.0,
                 min_value=0.0,
                 help="Extra contributions to maximize tax refund beyond optimization"
             )
@@ -1292,13 +1292,18 @@ else:
     # Optimization status
     penthouse_threshold = 181440
     
-    # Check if meaningful data has been entered (not all zeros)
-    has_data = (total_gross_income > 0 or base_salary > 0 or 
-                total_rrsp_contributions > 0 or tfsa_lump_sum > 0 or
-                rrsp_room > 0 or tfsa_room > 0)
+    # Check if user has started entering data
+    has_started = (total_gross_income > 0 or base_salary > 0 or 
+                   total_rrsp_contributions > 0 or tfsa_lump_sum > 0 or
+                   rrsp_room > 0 or tfsa_room > 0)
     
-    # Only show OPTIMIZED if data is entered AND taxable income is below threshold
-    is_optimized = has_data and taxable_income < penthouse_threshold
+    # Check if essential planning fields are complete
+    # Essential fields: income source + contribution rooms
+    planning_complete = ((t4_gross_income > 0 or other_income > 0) and 
+                         rrsp_room > 0 and tfsa_room > 0)
+    
+    # Only show OPTIMIZED if planning is complete AND below threshold
+    is_optimized = planning_complete and taxable_income < penthouse_threshold
     
     # Remaining room calculations
     remaining_rrsp_room = max(0, rrsp_room - total_rrsp_contributions)
@@ -1331,7 +1336,7 @@ else:
                     </div>
                 </div>
             """, unsafe_allow_html=True)
-        elif not has_data:
+        elif not has_started:
             st.markdown("""
                 <div style="background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); 
                      padding: 20px; border-radius: 12px; border: 2px solid #94a3b8; text-align: center;">
@@ -1353,7 +1358,7 @@ else:
                         IN PROGRESS
                     </div>
                     <div style="font-size: 0.9em; color: #9a3412; margin-top: 5px;">
-                        More RRSP needed
+                        Complete planning to optimize
                     </div>
                 </div>
             """, unsafe_allow_html=True)
