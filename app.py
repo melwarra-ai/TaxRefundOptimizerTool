@@ -244,6 +244,11 @@ st.markdown("""
         border-left: 4px solid #3b82f6;
     }
     
+    .priority-success {
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        border-left: 4px solid #10b981;
+    }
+    
     h1, h2, h3 {
         font-weight: 600;
         color: #1e293b;
@@ -1286,7 +1291,14 @@ else:
     
     # Optimization status
     penthouse_threshold = 181440
-    is_optimized = taxable_income < penthouse_threshold
+    
+    # Check if meaningful data has been entered (not all zeros)
+    has_data = (total_gross_income > 0 or base_salary > 0 or 
+                total_rrsp_contributions > 0 or tfsa_lump_sum > 0 or
+                rrsp_room > 0 or tfsa_room > 0)
+    
+    # Only show OPTIMIZED if data is entered AND taxable income is below threshold
+    is_optimized = has_data and taxable_income < penthouse_threshold
     
     # Remaining room calculations
     remaining_rrsp_room = max(0, rrsp_room - total_rrsp_contributions)
@@ -1316,6 +1328,19 @@ else:
                     </div>
                     <div style="font-size: 0.9em; color: #047857; margin-top: 5px;">
                         This year will show GREEN
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        elif not has_data:
+            st.markdown("""
+                <div style="background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); 
+                     padding: 20px; border-radius: 12px; border: 2px solid #94a3b8; text-align: center;">
+                    <div style="font-size: 3em;">⚪</div>
+                    <div style="font-size: 1.2em; font-weight: 600; color: #475569; margin-top: 10px;">
+                        IN PLANNING
+                    </div>
+                    <div style="font-size: 0.9em; color: #64748b; margin-top: 5px;">
+                        Enter your data to optimize
                     </div>
                 </div>
             """, unsafe_allow_html=True)
@@ -1949,14 +1974,14 @@ else:
         
         if employee_contribution > 0:
             if biweekly_pct >= employer_match_cap:
-                # Maximizing match
+                # Maximizing match - SUCCESS (Green)
                 insights.append({
-                    "icon": "🎁",
+                    "icon": "✅",
                     "title": "Excellent: Maximizing Employer Match",
                     "message": f"You're contributing {biweekly_pct:.1f}% (${employee_contribution:,.0f}) and your employer is matching "
                               f"{employer_match_cap:.1f}% (${employer_contribution:,.0f}). You're getting the full match! "
                               f"This is ${employer_contribution:,.0f} of free money every year. Keep it up!",
-                    "priority": "high"
+                    "priority": "success"
                 })
             else:
                 # Not maximizing match
@@ -2002,12 +2027,18 @@ else:
             "message": f"Your contribution room utilization is {efficiency_score*100:.1f}%. "
                       f"You're making excellent use of your available tax-advantaged space. "
                       f"Keep up this disciplined approach to wealth building!",
-            "priority": "high"
+            "priority": "success"
         })
     
     # Display insights
     for insight in insights:
-        priority_class = "priority-high" if insight['priority'] == "high" else "priority-medium"
+        if insight['priority'] == "high":
+            priority_class = "priority-high"
+        elif insight['priority'] == "success":
+            priority_class = "priority-success"
+        else:
+            priority_class = "priority-medium"
+        
         st.markdown(f'''
             <div class="premium-card {priority_class}">
                 <h4>{insight['icon']} {insight['title']}</h4>
