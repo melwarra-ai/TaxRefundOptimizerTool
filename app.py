@@ -682,7 +682,7 @@ if st.session_state.current_page == "Home":
     st.divider()
     
     # Get all years (saved + default range)
-    all_years = set(range(2024, 2031))
+    all_years = set(range(2025, 2035))
     all_years.update([int(yr) for yr in all_history.keys()])
     years_to_show = sorted(list(all_years))
     
