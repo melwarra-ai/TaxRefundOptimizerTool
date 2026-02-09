@@ -1,153 +1,447 @@
+"""
+TAX Optimization and TFSA Utilization
+Version 6.0.0 - Multi-User Authenticated Edition
+
+Complete application with PostgreSQL authentication
+Ready to deploy on Streamlit Cloud with Neon database
+"""
+
 import streamlit as st
 import pandas as pd
 import altair as alt
-import json
-import os
 import streamlit.components.v1 as components
-from datetime import datetime
+from datetime import datetime, timedelta
+import psycopg2
+from psycopg2 import pool
+from psycopg2.extras import RealDictCursor
+import hashlib
+import secrets
+import re
+import json
 
-# --- APP VERSION ---
-APP_VERSION = "v5.0.0"
+# ============================================================================
+# APP CONFIGURATION
+# ============================================================================
+
+APP_VERSION = "6.0.0"
 APP_DATE = "January 2026"
 
-# --- 1. PERSISTENCE ENGINE ---
-SAVE_FILE = "retirement_history.json"
-
-def load_all_data():
-    """Load all saved year data from JSON file"""
-    if os.path.exists(SAVE_FILE):
-        try:
-            with open(SAVE_FILE, "r") as f:
-                return json.load(f)
-        except Exception as e:
-            st.error(f"Error loading data: {e}")
-            return {}
-    return {}
-
-def save_year_data(year, data):
-    """Save data for a specific year"""
-    all_data = load_all_data()
-    all_data[str(year)] = data
-    try:
-        with open(SAVE_FILE, "w") as f:
-            json.dump(all_data, f, indent=2)
-        return True
-    except Exception as e:
-        st.error(f"Error saving data: {e}")
-        return False
-
-def delete_year_data(year):
-    """Delete data for a specific year"""
-    all_data = load_all_data()
-    if str(year) in all_data:
-        del all_data[str(year)]
-        try:
-            with open(SAVE_FILE, "w") as f:
-                json.dump(all_data, f, indent=2)
-            return True
-        except Exception as e:
-            st.error(f"Error deleting data: {e}")
-            return False
-    return False
-
-# --- 2. TAX CALCULATION ENGINE ---
-TAX_BRACKETS = [
-    {"name": "Floor 1", "low": 0, "high": 53891, "rate": 0.2005},
-    {"name": "Floor 2", "low": 53891, "high": 58523, "rate": 0.2415},
-    {"name": "Floor 3", "low": 58523, "high": 94907, "rate": 0.2965},
-    {"name": "Floor 4", "low": 94907, "high": 117045, "rate": 0.3148},
-    {"name": "Floor 5", "low": 117045, "high": 181440, "rate": 0.3389},
-    {"name": "Penthouse", "low": 181440, "high": float('inf'), "rate": 0.4797}
-]
-
-def calculate_tax_on_income(income):
-    """Calculate total tax owed on given income using marginal brackets"""
-    if income <= 0:
-        return 0
-    
-    total_tax = 0
-    for bracket in TAX_BRACKETS:
-        if income > bracket['low']:
-            taxable_in_bracket = min(income, bracket['high']) - bracket['low']
-            total_tax += taxable_in_bracket * bracket['rate']
-    
-    return total_tax
-
-def calculate_tax_refund(gross_income, rrsp_contributions):
-    """Calculate tax refund from RRSP contributions"""
-    if gross_income <= 0:
-        return 0
-    
-    tax_without_rrsp = calculate_tax_on_income(gross_income)
-    tax_with_rrsp = calculate_tax_on_income(gross_income - rrsp_contributions)
-    refund = tax_without_rrsp - tax_with_rrsp
-    
-    return max(0, refund)
-
-def get_marginal_rate(income):
-    """Get the marginal tax rate for a given income level"""
-    if income <= 0:
-        return 0
-    
-    for bracket in TAX_BRACKETS:
-        if bracket['low'] <= income < bracket['high']:
-            return bracket['rate']
-    
-    return TAX_BRACKETS[-1]['rate']
-
-def calculate_annual_rrsp(data):
-    """
-    Calculate total annual RRSP contributions including employer match.
-    Employer matches 100% of employee contribution up to the employer_match cap.
-    """
-    base_salary = data.get('base_salary', 0)
-    biweekly_pct = data.get('biweekly_pct', 0)
-    employer_match_cap = data.get('employer_match', 0)  # This is the cap %
-    
-    # Employee contribution
-    employee_contrib = base_salary * (biweekly_pct / 100)
-    
-    # Employer matches up to the cap
-    employer_contrib = base_salary * (min(biweekly_pct, employer_match_cap) / 100)
-    
-    # Periodic contributions (from paychecks)
-    periodic_rrsp = employee_contrib + employer_contrib
-    
-    # Add lump sum contributions
-    lump_sum = data.get('rrsp_lump_sum_optimization', 0) + \
-                data.get('rrsp_lump_sum_additional', 0) + \
-                data.get('rrsp_lump_sum', 0)  # Legacy support
-    
-    return periodic_rrsp + lump_sum
-
-def is_year_optimized(year_data):
-    """Check if a year is optimized (minimizing penthouse exposure)"""
-    if not year_data:
-        return False
-    
-    # Calculate values
-    t4_gross = year_data.get('t4_gross_income', 0)
-    other_inc = year_data.get('other_income', 0)
-    total_gross = t4_gross + other_inc
-    
-    # Use helper function for RRSP calculation
-    total_rrsp = calculate_annual_rrsp(year_data)
-    taxable_income = max(0, total_gross - total_rrsp)
-    
-    # Optimized if no penthouse exposure (taxable income at or under $181,440)
-    # Note: Exactly $181,440 is NOT in Penthouse due to > comparison in tax calculation
-    penthouse_threshold = 181440
-    return taxable_income <= penthouse_threshold
-
-# --- 3. CONFIGURATION & STYLING ---
+# Page config - must be first Streamlit command
 st.set_page_config(
-    page_title="TAX Optimization and TFSA Utilization",
+    page_title="TAX Optimization App",
     page_icon="🏦",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Premium Fintech Styling
+# ============================================================================
+# DATABASE CONNECTION POOL
+# ============================================================================
+
+class DatabasePool:
+    """PostgreSQL connection pool singleton"""
+    _instance = None
+    _pool = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DatabasePool, cls).__new__(cls)
+        return cls._instance
+    
+    def get_pool(self):
+        """Get or create connection pool"""
+        if self._pool is None:
+            try:
+                db_config = st.secrets["database"]
+                self._pool = psycopg2.pool.SimpleConnectionPool(
+                    minconn=1,
+                    maxconn=10,
+                    host=db_config["host"],
+                    port=db_config["port"],
+                    database=db_config["name"],
+                    user=db_config["user"],
+                    password=db_config["password"],
+                    sslmode=db_config.get("sslmode", "require")
+                )
+            except Exception as e:
+                st.error(f"Database connection failed: {str(e)}")
+                st.stop()
+        return self._pool
+
+db_pool = DatabasePool()
+
+def get_db_connection():
+    """Get database connection from pool"""
+    return db_pool.get_pool().getconn()
+
+def return_db_connection(conn):
+    """Return connection to pool"""
+    db_pool.get_pool().putconn(conn)
+
+def execute_query(query, params=None, fetch=True):
+    """Execute database query"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(query, params)
+        
+        if fetch:
+            result = cursor.fetchall()
+        else:
+            result = None
+        
+        conn.commit()
+        cursor.close()
+        return result
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        st.error(f"Database error: {str(e)}")
+        raise
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+# ============================================================================
+# AUTHENTICATION FUNCTIONS
+# ============================================================================
+
+def hash_password(password, salt=None):
+    """Hash password with SHA-256 and salt"""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    hashed = hashlib.sha256((password + salt).encode()).hexdigest()
+    return hashed, salt
+
+def verify_password(password, stored_hash, salt):
+    """Verify password against stored hash"""
+    computed_hash, _ = hash_password(password, salt)
+    return computed_hash == stored_hash
+
+def generate_session_token():
+    """Generate secure session token"""
+    return secrets.token_urlsafe(32)
+
+def validate_username(username):
+    """Validate username format"""
+    if not username or len(username) < 3 or len(username) > 20:
+        return False, "Username must be 3-20 characters"
+    if not re.match(r'^[a-zA-Z0-9_]+$', username):
+        return False, "Username can only contain letters, numbers, and underscores"
+    return True, ""
+
+def validate_email(email):
+    """Validate email format"""
+    if not email:
+        return False, "Email is required"
+    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+        return False, "Invalid email format"
+    return True, ""
+
+def validate_password(password):
+    """Validate password strength"""
+    if not password or len(password) < 8:
+        return False, "Password must be at least 8 characters"
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain uppercase letter"
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain lowercase letter"
+    if not re.search(r'\d', password):
+        return False, "Password must contain a number"
+    return True, ""
+
+def register_user(username, email, password, confirm_password):
+    """Register new user"""
+    # Validate inputs
+    is_valid, error = validate_username(username)
+    if not is_valid:
+        return False, error
+    
+    is_valid, error = validate_email(email)
+    if not is_valid:
+        return False, error
+    
+    is_valid, error = validate_password(password)
+    if not is_valid:
+        return False, error
+    
+    if password != confirm_password:
+        return False, "Passwords do not match"
+    
+    # Check if username exists
+    result = execute_query("SELECT COUNT(*) as count FROM users WHERE username = %s", (username,))
+    if result[0]['count'] > 0:
+        return False, "Username already taken"
+    
+    # Check if email exists
+    result = execute_query("SELECT COUNT(*) as count FROM users WHERE email = %s", (email,))
+    if result[0]['count'] > 0:
+        return False, "Email already registered"
+    
+    # Hash password
+    password_hash, salt = hash_password(password)
+    
+    # Determine role (first user = admin)
+    result = execute_query("SELECT COUNT(*) as count FROM users")
+    role = 'admin' if result[0]['count'] == 0 else 'user'
+    
+    # Create user
+    execute_query(
+        "INSERT INTO users (username, email, password_hash, salt, role) VALUES (%s, %s, %s, %s, %s)",
+        (username, email, password_hash, salt, role),
+        fetch=False
+    )
+    
+    role_msg = " (Admin)" if role == 'admin' else ""
+    return True, f"Account created successfully{role_msg}! Please login."
+
+def login_user(username_or_email, password):
+    """Authenticate user and create session"""
+    # Get user
+    result = execute_query("SELECT * FROM users WHERE username = %s OR email = %s", 
+                          (username_or_email, username_or_email))
+    
+    if not result:
+        return False, "Invalid username/email or password", None
+    
+    user = dict(result[0])
+    
+    # Check if active
+    if not user['is_active']:
+        return False, "Account is deactivated", None
+    
+    # Check if locked
+    if user['lockout_until'] and user['lockout_until'] > datetime.now():
+        remaining = (user['lockout_until'] - datetime.now()).seconds // 60
+        return False, f"Account locked. Try again in {remaining} minutes.", None
+    
+    # Verify password
+    if not verify_password(password, user['password_hash'], user['salt']):
+        # Increment failed attempts
+        execute_query(
+            "UPDATE users SET login_attempts = login_attempts + 1 WHERE user_id = %s",
+            (user['user_id'],),
+            fetch=False
+        )
+        
+        # Lock if too many attempts
+        if user['login_attempts'] + 1 >= 5:
+            lockout_until = datetime.now() + timedelta(minutes=30)
+            execute_query(
+                "UPDATE users SET lockout_until = %s WHERE user_id = %s",
+                (lockout_until, user['user_id']),
+                fetch=False
+            )
+            return False, "Too many failed attempts. Account locked for 30 minutes.", None
+        
+        attempts_left = 5 - (user['login_attempts'] + 1)
+        return False, f"Invalid username/email or password. {attempts_left} attempts remaining.", None
+    
+    # Successful login
+    execute_query(
+        "UPDATE users SET login_attempts = 0, lockout_until = NULL, last_login = %s WHERE user_id = %s",
+        (datetime.now(), user['user_id']),
+        fetch=False
+    )
+    
+    # Create session
+    session_token = generate_session_token()
+    expires_at = datetime.now() + timedelta(minutes=60)
+    execute_query(
+        "INSERT INTO user_sessions (user_id, session_token, expires_at) VALUES (%s, %s, %s)",
+        (user['user_id'], session_token, expires_at),
+        fetch=False
+    )
+    
+    # Record login
+    execute_query(
+        "INSERT INTO login_history (user_id, success) VALUES (%s, %s)",
+        (user['user_id'], True),
+        fetch=False
+    )
+    
+    user_data = {
+        'user_id': user['user_id'],
+        'username': user['username'],
+        'email': user['email'],
+        'role': user['role'],
+        'session_token': session_token
+    }
+    
+    return True, "Login successful!", user_data
+
+def verify_session(session_token):
+    """Verify if session is valid"""
+    if not session_token:
+        return False, None
+    
+    result = execute_query(
+        """SELECT s.*, u.* FROM user_sessions s 
+           JOIN users u ON s.user_id = u.user_id
+           WHERE s.session_token = %s AND s.is_active = TRUE AND s.expires_at > %s""",
+        (session_token, datetime.now())
+    )
+    
+    if not result:
+        return False, None
+    
+    session = dict(result[0])
+    
+    # Update last activity
+    execute_query(
+        "UPDATE user_sessions SET last_activity = %s WHERE session_token = %s",
+        (datetime.now(), session_token),
+        fetch=False
+    )
+    
+    user_data = {
+        'user_id': session['user_id'],
+        'username': session['username'],
+        'email': session['email'],
+        'role': session['role'],
+        'session_token': session_token
+    }
+    
+    return True, user_data
+
+def logout_user(session_token):
+    """Logout user by invalidating session"""
+    if session_token:
+        execute_query(
+            "UPDATE user_sessions SET is_active = FALSE WHERE session_token = %s",
+            (session_token,),
+            fetch=False
+        )
+
+def change_password(user_id, current_password, new_password, confirm_password):
+    """Change user password"""
+    # Get user
+    result = execute_query("SELECT * FROM users WHERE user_id = %s", (user_id,))
+    if not result:
+        return False, "User not found"
+    
+    user = dict(result[0])
+    
+    # Verify current password
+    if not verify_password(current_password, user['password_hash'], user['salt']):
+        return False, "Current password is incorrect"
+    
+    # Validate new password
+    is_valid, error = validate_password(new_password)
+    if not is_valid:
+        return False, error
+    
+    if new_password != confirm_password:
+        return False, "New passwords do not match"
+    
+    if current_password == new_password:
+        return False, "New password must be different"
+    
+    # Hash new password
+    new_hash, new_salt = hash_password(new_password)
+    
+    # Update password
+    execute_query(
+        "UPDATE users SET password_hash = %s, salt = %s WHERE user_id = %s",
+        (new_hash, new_salt, user_id),
+        fetch=False
+    )
+    
+    # Invalidate all sessions
+    execute_query(
+        "UPDATE user_sessions SET is_active = FALSE WHERE user_id = %s",
+        (user_id,),
+        fetch=False
+    )
+    
+    return True, "Password changed successfully. Please login again."
+
+# ============================================================================
+# DATA FUNCTIONS (PostgreSQL instead of JSON)
+# ============================================================================
+
+def load_all_data(user_id):
+    """Load all year data for user"""
+    result = execute_query(
+        "SELECT year, data FROM tax_planning_years WHERE user_id = %s ORDER BY year",
+        (user_id,)
+    )
+    if result:
+        return {str(row['year']): row['data'] for row in result}
+    return {}
+
+def save_year_data(user_id, year, data):
+    """Save year data for user"""
+    try:
+        data_json = json.dumps(data)
+        execute_query(
+            """INSERT INTO tax_planning_years (user_id, year, data)
+               VALUES (%s, %s, %s)
+               ON CONFLICT (user_id, year) 
+               DO UPDATE SET data = %s, updated_at = CURRENT_TIMESTAMP""",
+            (user_id, year, data_json, data_json),
+            fetch=False
+        )
+        return True
+    except:
+        return False
+
+def delete_year_data(user_id, year):
+    """Delete year data for user"""
+    try:
+        execute_query(
+            "DELETE FROM tax_planning_years WHERE user_id = %s AND year = %s",
+            (user_id, year),
+            fetch=False
+        )
+        return True
+    except:
+        return False
+
+# ============================================================================
+# SESSION STATE INITIALIZATION
+# ============================================================================
+
+def init_session_state():
+    """Initialize session state"""
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+    if "user_id" not in st.session_state:
+        st.session_state.user_id = None
+    if "username" not in st.session_state:
+        st.session_state.username = None
+    if "email" not in st.session_state:
+        st.session_state.email = None
+    if "role" not in st.session_state:
+        st.session_state.role = None
+    if "session_token" not in st.session_state:
+        st.session_state.session_token = None
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = "Home"
+    if "selected_year" not in st.session_state:
+        st.session_state.selected_year = 2025
+    if "saved_flag" not in st.session_state:
+        st.session_state.saved_flag = False
+
+init_session_state()
+
+# Check session validity
+if st.session_state.logged_in and st.session_state.session_token:
+    is_valid, user_data = verify_session(st.session_state.session_token)
+    if not is_valid:
+        st.session_state.logged_in = False
+        st.session_state.user_id = None
+        st.session_state.username = None
+        st.session_state.email = None
+        st.session_state.role = None
+        st.session_state.session_token = None
+        st.rerun()
+
+# ============================================================================
+# STYLING
+# ============================================================================
+
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -193,83 +487,15 @@ st.markdown("""
         border-left: 4px solid #3b82f6;
     }
     
-    .year-tile {
-        background: white;
-        border-radius: 12px;
-        padding: 16px;
-        text-align: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-        cursor: pointer;
-        border: 2px solid transparent;
-    }
-    
-    .year-tile:hover {
-        box-shadow: 0 8px 16px rgba(0,0,0,0.12);
-        transform: translateY(-2px);
-        border-color: #3b82f6;
-    }
-    
-    .year-tile-saved {
-        border-left: 4px solid #10b981;
-    }
-    
-    .year-tile-empty {
-        border-left: 4px solid #94a3b8;
-    }
-    
-    .year-tile-progress {
-        border-left: 4px solid #f97316;
-    }
-    
-    .status-saved {
-        color: #10b981;
-        font-weight: 600;
-        margin-top: 8px;
-        display: block;
-        animation: fadeIn 0.5s;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-    
-    .priority-high {
-        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        border-left: 4px solid #f59e0b;
-    }
-    
-    .priority-medium {
-        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-        border-left: 4px solid #3b82f6;
-    }
-    
-    .priority-success {
-        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-        border-left: 4px solid #10b981;
-    }
-    
     h1, h2, h3 {
         font-weight: 600;
         color: #1e293b;
-    }
-    
-    @media print {
-        div[data-testid="stSidebar"], 
-        .stButton, 
-        button:not(.print-button), 
-        header, 
-        footer, 
-        [data-testid="stToolbar"] {
-            display: none !important;
-        }
     }
     </style>
 """, unsafe_allow_html=True)
 
 def description_box(title, content):
-    """Render a premium description box"""
+    """Render premium description box"""
     st.markdown(f'''
         <div class="desc-box">
             <h4>{title}</h4>
@@ -277,20 +503,287 @@ def description_box(title, content):
         </div>
     ''', unsafe_allow_html=True)
 
-# --- 4. SESSION STATE INITIALIZATION ---
-if "current_page" not in st.session_state:
-    st.session_state.current_page = "Home"
-if "selected_year" not in st.session_state:
-    st.session_state.selected_year = 2025
-if "saved_flag" not in st.session_state:
-    st.session_state.saved_flag = False
-if "refund_to_tfsa" not in st.session_state:
-    st.session_state.refund_to_tfsa = 0
+# ============================================================================
+# TAX CALCULATION ENGINE (from v5)
+# ============================================================================
 
-# Load all historical data
-all_history = load_all_data()
+TAX_BRACKETS = [
+    {"name": "Floor 1", "low": 0, "high": 53891, "rate": 0.2005},
+    {"name": "Floor 2", "low": 53891, "high": 58523, "rate": 0.2415},
+    {"name": "Floor 3", "low": 58523, "high": 94907, "rate": 0.2965},
+    {"name": "Floor 4", "low": 94907, "high": 117045, "rate": 0.3148},
+    {"name": "Floor 5", "low": 117045, "high": 181440, "rate": 0.3389},
+    {"name": "Penthouse", "low": 181440, "high": float('inf'), "rate": 0.4797}
+]
 
-# --- 5. PAGE: HOME ---
+def calculate_tax_on_income(income):
+    if income <= 0:
+        return 0
+    total_tax = 0
+    for bracket in TAX_BRACKETS:
+        if income > bracket['low']:
+            taxable_in_bracket = min(income, bracket['high']) - bracket['low']
+            total_tax += taxable_in_bracket * bracket['rate']
+    return total_tax
+
+def calculate_tax_refund(gross_income, rrsp_contributions):
+    if gross_income <= 0:
+        return 0
+    tax_without_rrsp = calculate_tax_on_income(gross_income)
+    tax_with_rrsp = calculate_tax_on_income(gross_income - rrsp_contributions)
+    refund = tax_without_rrsp - tax_with_rrsp
+    return max(0, refund)
+
+def get_marginal_rate(income):
+    if income <= 0:
+        return 0
+    for bracket in TAX_BRACKETS:
+        if bracket['low'] <= income < bracket['high']:
+            return bracket['rate']
+    return TAX_BRACKETS[-1]['rate']
+
+def calculate_annual_rrsp(data):
+    base_salary = data.get('base_salary', 0)
+    biweekly_pct = data.get('biweekly_pct', 0)
+    employer_match_cap = data.get('employer_match', 0)
+    employee_contrib = base_salary * (biweekly_pct / 100)
+    employer_contrib = base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+    periodic_rrsp = employee_contrib + employer_contrib
+    lump_sum = data.get('rrsp_lump_sum_optimization', 0) + \
+                data.get('rrsp_lump_sum_additional', 0) + \
+                data.get('rrsp_lump_sum', 0)
+    return periodic_rrsp + lump_sum
+
+def get_rrsp_deadline(tax_year):
+    deadline_year = tax_year + 1
+    deadline_date = datetime(deadline_year, 3, 1)
+    weekday = deadline_date.weekday()
+    
+    if weekday == 5:  # Saturday
+        deadline_date += timedelta(days=2)
+        weekend_note = " (Monday, as March 1st is Saturday)"
+    elif weekday == 6:  # Sunday
+        deadline_date += timedelta(days=1)
+        weekend_note = " (Monday, as March 1st is Sunday)"
+    else:
+        weekend_note = ""
+    
+    formatted_date = deadline_date.strftime("%B %d, %Y")
+    today = datetime.now()
+    days_until = (deadline_date - today).days
+    
+    return deadline_date, formatted_date + weekend_note, days_until
+
+def is_year_optimized(year_data):
+    if not year_data:
+        return False
+    t4_gross = year_data.get('t4_gross_income', 0)
+    other_inc = year_data.get('other_income', 0)
+    total_gross = t4_gross + other_inc
+    total_rrsp = calculate_annual_rrsp(year_data)
+    taxable_income = max(0, total_gross - total_rrsp)
+    penthouse_threshold = 181440
+    return taxable_income <= penthouse_threshold
+
+# ============================================================================
+# LOGIN/REGISTER PAGE
+# ============================================================================
+
+def show_auth_page():
+    """Display login/register page"""
+    
+    st.markdown("""
+        <div style="text-align: center; padding: 50px 0 30px 0;">
+            <h1 style="font-size: 3em; margin-bottom: 10px;">🏦 TAX Optimization</h1>
+            <p style="font-size: 1.2em; color: #64748b;">RRSP & TFSA Planning Platform</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        tab1, tab2 = st.tabs(["Login", "Register"])
+        
+        # LOGIN TAB
+        with tab1:
+            st.markdown("### Login to Your Account")
+            
+            with st.form("login_form"):
+                username_or_email = st.text_input("Username or Email")
+                password = st.text_input("Password", type="password")
+                
+                login_button = st.form_submit_button("🔐 Login", use_container_width=True, type="primary")
+                
+                if login_button:
+                    if not username_or_email or not password:
+                        st.error("Please enter both username/email and password")
+                    else:
+                        success, message, user_data = login_user(username_or_email, password)
+                        
+                        if success:
+                            st.session_state.logged_in = True
+                            st.session_state.user_id = user_data['user_id']
+                            st.session_state.username = user_data['username']
+                            st.session_state.email = user_data['email']
+                            st.session_state.role = user_data['role']
+                            st.session_state.session_token = user_data['session_token']
+                            st.success(message)
+                            st.rerun()
+                        else:
+                            st.error(message)
+        
+        # REGISTER TAB
+        with tab2:
+            st.markdown("### Create New Account")
+            
+            with st.form("register_form"):
+                new_username = st.text_input("Username (3-20 characters)")
+                new_email = st.text_input("Email Address")
+                new_password = st.text_input("Password (min 8 chars)", type="password")
+                confirm_password = st.text_input("Confirm Password", type="password")
+                
+                register_button = st.form_submit_button("✨ Create Account", 
+                                                        use_container_width=True, type="primary")
+                
+                if register_button:
+                    success, message = register_user(new_username, new_email, 
+                                                     new_password, confirm_password)
+                    
+                    if success:
+                        st.success(message)
+                        st.balloons()
+                    else:
+                        st.error(message)
+    
+    st.markdown("---")
+    st.markdown(f"""
+        <div style="text-align: center; color: #64748b; padding: 20px;">
+            <p>Version {APP_VERSION} • Multi-User Edition • Powered by PostgreSQL</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+# ============================================================================
+# USER PROFILE PAGE
+# ============================================================================
+
+def show_profile_page():
+    """Display user profile"""
+    
+    with st.sidebar:
+        if st.button("⬅️ Back to App", use_container_width=True):
+            st.session_state.current_page = "Home"
+            st.rerun()
+        
+        st.divider()
+        
+        if st.button("🚪 Logout", use_container_width=True, type="secondary"):
+            logout_user(st.session_state.session_token)
+            st.session_state.logged_in = False
+            st.session_state.user_id = None
+            st.session_state.username = None
+            st.session_state.email = None
+            st.session_state.role = None
+            st.session_state.session_token = None
+            st.rerun()
+    
+    st.title(f"👤 User Profile: {st.session_state.username}")
+    
+    # Account Info
+    result = execute_query("SELECT * FROM users WHERE user_id = %s", (st.session_state.user_id,))
+    if result:
+        user = dict(result[0])
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.info(f"""
+            **Username:** {user['username']}  
+            **Email:** {user['email']}  
+            **Role:** {user['role'].upper()}  
+            **Created:** {user['created_at'].strftime('%B %d, %Y')}  
+            **Last Login:** {user['last_login'].strftime('%B %d, %Y %I:%M %p') if user['last_login'] else 'Never'}
+            """)
+        
+        with col2:
+            st.markdown("### 📜 Recent Logins")
+            history = execute_query(
+                "SELECT * FROM login_history WHERE user_id = %s ORDER BY login_time DESC LIMIT 5",
+                (st.session_state.user_id,)
+            )
+            if history:
+                for entry in history:
+                    status = "✅" if entry['success'] else "❌"
+                    time = entry['login_time'].strftime('%m/%d %I:%M%p')
+                    st.text(f"{status} {time}")
+    
+    # Change Password
+    st.markdown("### 🔐 Change Password")
+    
+    with st.form("change_password_form"):
+        current_pw = st.text_input("Current Password", type="password")
+        new_pw = st.text_input("New Password", type="password")
+        confirm_pw = st.text_input("Confirm New Password", type="password")
+        
+        if st.form_submit_button("Update Password", type="primary"):
+            success, message = change_password(st.session_state.user_id, 
+                                              current_pw, new_pw, confirm_pw)
+            
+            if success:
+                st.success(message)
+                st.info("Logging out... Please login with your new password.")
+                st.session_state.logged_in = False
+                st.rerun()
+            else:
+                st.error(message)
+
+# ============================================================================
+# MAIN APPLICATION (from v5, with auth wrapper)
+# ============================================================================
+
+# If not logged in, show auth page
+if not st.session_state.logged_in:
+    show_auth_page()
+    st.stop()
+
+# If logged in, show main app
+# Load user's data
+all_history = load_all_data(st.session_state.user_id)
+
+# Sidebar navigation
+with st.sidebar:
+    st.markdown(f"### 👤 {st.session_state.username}")
+    st.caption(f"Role: {st.session_state.role.upper()}")
+    
+    st.divider()
+    
+    if st.button("👤 Profile Settings", use_container_width=True):
+        st.session_state.current_page = "Profile"
+        st.rerun()
+    
+    if st.button("🚪 Logout", use_container_width=True, type="secondary"):
+        logout_user(st.session_state.session_token)
+        st.session_state.logged_in = False
+        st.session_state.user_id = None
+        st.session_state.username = None
+        st.session_state.email = None
+        st.session_state.role = None
+        st.session_state.session_token = None
+        st.rerun()
+
+# Show profile page if selected
+if st.session_state.current_page == "Profile":
+    show_profile_page()
+    st.stop()
+
+# Otherwise, show main app (Home or Year View)
+# Continue with rest of v5 app logic...
+
+
+
+# ============================================================================
+# MAIN APPLICATION PAGES (from v5)
+# ============================================================================
+
 if st.session_state.current_page == "Home":
     st.title("🏦 TAX Optimization and TFSA Utilization")
     
