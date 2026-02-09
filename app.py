@@ -1409,7 +1409,7 @@ if st.session_state.current_page == "Home":
     with col_add4:
         if delete_year_input and len(all_history) > 0:
             if st.button("🗑️ Remove", use_container_width=True):
-                if delete_year_data(delete_year_input):
+                if delete_year_data(st.session_state.user_id, delete_year_input):
                     st.success(f"✓ Year {delete_year_input} removed successfully!")
                     st.rerun()
                 else:
@@ -2058,7 +2058,7 @@ else:
                 )
             
             if submitted:
-                success = save_year_data(selected_year, {
+                success = save_year_data(st.session_state.user_id, selected_year, {
                     "t4_gross_income": t4_gross_income,
                     "other_income": other_income,
                     "base_salary": base_salary,
@@ -2079,7 +2079,7 @@ else:
                     st.rerun()
             
             if reset:
-                delete_year_data(selected_year)
+                delete_year_data(st.session_state.user_id, selected_year)
                 st.rerun()
         
         if st.session_state.get("saved_flag"):
