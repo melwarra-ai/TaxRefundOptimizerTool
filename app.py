@@ -86,7 +86,7 @@ def return_db_connection(conn):
     """Return connection to pool"""
     db_pool.get_pool().putconn(conn)
 
-def execute_query(query, params=None, fetch=True):
+def execute_query(query, params=None, fetch=True, show_error=True):
     """Execute database query"""
     conn = None
     try:
@@ -105,7 +105,8 @@ def execute_query(query, params=None, fetch=True):
     except Exception as e:
         if conn:
             conn.rollback()
-        st.error(f"Database error: {str(e)}")
+        if show_error:
+            st.error(f"Database error: {str(e)}")
         raise
     finally:
         if conn:
@@ -123,10 +124,12 @@ class DatabaseMigration:
         """Get current schema version from database"""
         try:
             result = execute_query(
-                "SELECT version FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"
+                "SELECT version FROM schema_migrations ORDER BY applied_at DESC LIMIT 1",
+                show_error=False  # Don't show error if table doesn't exist yet
             )
             return result[0]['version'] if result else 0
-        except:
+        except Exception:
+            # Table doesn't exist yet - this is fine, return 0
             return 0
     
     @staticmethod
@@ -299,9 +302,17 @@ class DatabaseMigration:
 def initialize_database():
     """Initialize database - creates tables automatically on first run!"""
     try:
-        with st.spinner("🔄 Initializing database..."):
+        initial_version = DatabaseMigration.get_schema_version()
+        
+        if initial_version == 0:
+            with st.spinner("🔄 Setting up database for first time..."):
+                final_version = DatabaseMigration.run_migrations()
+            st.success(f"✅ Database initialized successfully! All tables created.")
+        else:
             final_version = DatabaseMigration.run_migrations()
-        st.success(f"✅ Database ready! Schema version: {final_version}")
+            if final_version > initial_version:
+                st.info(f"✅ Database updated to version {final_version}")
+        
         return True
     except Exception as e:
         st.error(f"❌ Database initialization failed: {e}")
@@ -870,6 +881,155 @@ def show_auth_page():
     """, unsafe_allow_html=True)
 
 # ============================================================================
+# ADMIN DASHBOARD PAGE
+# ============================================================================
+
+def show_admin_dashboard():
+    """Display admin dashboard for user management"""
+    
+    with st.sidebar:
+        if st.button("⬅️ Back to App", use_container_width=True, key="admin_back_btn"):
+            st.session_state.current_page = "Home"
+            st.rerun()
+        
+        st.divider()
+        
+        if st.button("🚪 Logout", use_container_width=True, type="secondary", key="admin_logout_btn"):
+            logout_user(st.session_state.session_token)
+            st.session_state.logged_in = False
+            st.session_state.user_id = None
+            st.session_state.username = None
+            st.session_state.email = None
+            st.session_state.role = None
+            st.session_state.session_token = None
+            st.rerun()
+    
+    st.title("👥 Admin Dashboard")
+    
+    # User statistics
+    st.markdown("### 📊 System Statistics")
+    
+    try:
+        stats_query = """
+            SELECT 
+                COUNT(*) as total_users,
+                SUM(CASE WHEN is_active THEN 1 ELSE 0 END) as active_users,
+                SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) as admin_users
+            FROM users
+        """
+        stats = execute_query(stats_query)
+        
+        if stats:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Users", stats[0]['total_users'])
+            with col2:
+                st.metric("Active Users", stats[0]['active_users'])
+            with col3:
+                st.metric("Admins", stats[0]['admin_users'])
+    except Exception as e:
+        st.error(f"Error loading statistics: {e}")
+    
+    st.divider()
+    
+    # User management
+    st.markdown("### 👥 User Management")
+    
+    try:
+        users_query = """
+            SELECT user_id, username, email, role, is_active, created_at, last_login
+            FROM users
+            ORDER BY created_at DESC
+        """
+        users = execute_query(users_query)
+        
+        if users:
+            # Display as table
+            df = pd.DataFrame(users)
+            df['created_at'] = pd.to_datetime(df['created_at']).dt.strftime('%Y-%m-%d')
+            df['last_login'] = pd.to_datetime(df['last_login']).dt.strftime('%Y-%m-%d %H:%M')
+            
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            
+            st.divider()
+            
+            # User actions
+            st.markdown("### ⚙️ User Actions")
+            
+            col_action1, col_action2, col_action3 = st.columns([2, 2, 1])
+            
+            with col_action1:
+                selected_username = st.selectbox(
+                    "Select User",
+                    options=[u['username'] for u in users],
+                    key="admin_user_select"
+                )
+            
+            with col_action2:
+                action = st.selectbox(
+                    "Action",
+                    ["Promote to Admin", "Demote to User", "Deactivate Account", "Activate Account"],
+                    key="admin_action_select"
+                )
+            
+            with col_action3:
+                execute_btn = st.button("Execute", type="primary", use_container_width=True)
+            
+            if execute_btn and selected_username:
+                selected_user = next(u for u in users if u['username'] == selected_username)
+                
+                try:
+                    if action == "Promote to Admin":
+                        execute_query(
+                            "UPDATE users SET role = 'admin' WHERE user_id = %s",
+                            (selected_user['user_id'],),
+                            fetch=False
+                        )
+                        st.success(f"✅ {selected_username} promoted to admin")
+                        st.rerun()
+                    
+                    elif action == "Demote to User":
+                        if selected_user['user_id'] == st.session_state.user_id:
+                            st.error("❌ You cannot demote yourself!")
+                        else:
+                            execute_query(
+                                "UPDATE users SET role = 'user' WHERE user_id = %s",
+                                (selected_user['user_id'],),
+                                fetch=False
+                            )
+                            st.success(f"✅ {selected_username} demoted to user")
+                            st.rerun()
+                    
+                    elif action == "Deactivate Account":
+                        if selected_user['user_id'] == st.session_state.user_id:
+                            st.error("❌ You cannot deactivate yourself!")
+                        else:
+                            execute_query(
+                                "UPDATE users SET is_active = FALSE WHERE user_id = %s",
+                                (selected_user['user_id'],),
+                                fetch=False
+                            )
+                            st.success(f"✅ {selected_username} account deactivated")
+                            st.rerun()
+                    
+                    elif action == "Activate Account":
+                        execute_query(
+                            "UPDATE users SET is_active = TRUE WHERE user_id = %s",
+                            (selected_user['user_id'],),
+                            fetch=False
+                        )
+                        st.success(f"✅ {selected_username} account activated")
+                        st.rerun()
+                
+                except Exception as e:
+                    st.error(f"Error executing action: {e}")
+        else:
+            st.info("No users found")
+    
+    except Exception as e:
+        st.error(f"Error loading users: {e}")
+
+# ============================================================================
 # USER PROFILE PAGE
 # ============================================================================
 
@@ -877,13 +1037,13 @@ def show_profile_page():
     """Display user profile"""
     
     with st.sidebar:
-        if st.button("⬅️ Back to App", use_container_width=True):
+        if st.button("⬅️ Back to App", use_container_width=True, key="profile_back_btn"):
             st.session_state.current_page = "Home"
             st.rerun()
         
         st.divider()
         
-        if st.button("🚪 Logout", use_container_width=True, type="secondary"):
+        if st.button("🚪 Logout", use_container_width=True, type="secondary", key="profile_logout_btn"):
             logout_user(st.session_state.session_token)
             st.session_state.logged_in = False
             st.session_state.user_id = None
@@ -963,11 +1123,17 @@ with st.sidebar:
     
     st.divider()
     
-    if st.button("👤 Profile Settings", use_container_width=True):
+    # Admin dashboard button (only for admins)
+    if st.session_state.role == 'admin':
+        if st.button("👥 Admin Dashboard", use_container_width=True, key="main_admin_btn", type="primary"):
+            st.session_state.current_page = "Admin"
+            st.rerun()
+    
+    if st.button("👤 Profile Settings", use_container_width=True, key="main_profile_btn"):
         st.session_state.current_page = "Profile"
         st.rerun()
     
-    if st.button("🚪 Logout", use_container_width=True, type="secondary"):
+    if st.button("🚪 Logout", use_container_width=True, type="secondary", key="main_logout_btn"):
         logout_user(st.session_state.session_token)
         st.session_state.logged_in = False
         st.session_state.user_id = None
@@ -975,6 +1141,16 @@ with st.sidebar:
         st.session_state.email = None
         st.session_state.role = None
         st.session_state.session_token = None
+        st.rerun()
+
+# Show admin dashboard if selected (admin only)
+if st.session_state.current_page == "Admin":
+    if st.session_state.role == 'admin':
+        show_admin_dashboard()
+        st.stop()
+    else:
+        st.error("⛔ Access denied. Admin privileges required.")
+        st.session_state.current_page = "Home"
         st.rerun()
 
 # Show profile page if selected
