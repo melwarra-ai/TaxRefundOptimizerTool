@@ -1,9 +1,17 @@
 """
 TAX Optimization and TFSA Utilization
-Version 6.0.0 - Multi-User Authenticated Edition
+Version 6.1.0 - COMPLETE Multi-User Edition with Auto-Migration
 
-Complete application with PostgreSQL authentication
+Complete application with:
+- PostgreSQL authentication
+- Auto-database migration (creates tables automatically!)
+- All original tax planning features
+- Multi-year analytics and charts
+- Portfolio tracking
+- Strategic insights
+
 Ready to deploy on Streamlit Cloud with Neon database
+NO MANUAL SQL REQUIRED - Tables create automatically on first run!
 """
 
 import streamlit as st
@@ -23,8 +31,8 @@ import json
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.0.0"
-APP_DATE = "January 2026"
+APP_VERSION = "6.1.0 - COMPLETE with Auto-Migration"
+APP_DATE = "February 2026"
 
 # Page config - must be first Streamlit command
 st.set_page_config(
@@ -102,6 +110,205 @@ def execute_query(query, params=None, fetch=True):
     finally:
         if conn:
             return_db_connection(conn)
+
+# ============================================================================
+# AUTO-MIGRATION SYSTEM (creates tables automatically!)
+# ============================================================================
+
+class DatabaseMigration:
+    """Automatic database migration - creates all tables on first run"""
+    
+    @staticmethod
+    def get_schema_version():
+        """Get current schema version from database"""
+        try:
+            result = execute_query(
+                "SELECT version FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"
+            )
+            return result[0]['version'] if result else 0
+        except:
+            return 0
+    
+    @staticmethod
+    def record_migration(version, description):
+        """Record completed migration"""
+        execute_query(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (%s, %s, %s)",
+            (version, description, datetime.now()),
+            fetch=False
+        )
+    
+    @staticmethod
+    def run_migrations():
+        """Run all pending migrations"""
+        current_version = DatabaseMigration.get_schema_version()
+        
+        if current_version < 1:
+            DatabaseMigration.migration_001_create_migrations_table()
+            current_version = 1
+        
+        if current_version < 2:
+            DatabaseMigration.migration_002_create_core_tables()
+            current_version = 2
+        
+        if current_version < 3:
+            DatabaseMigration.migration_003_add_phase2_tables()
+            current_version = 3
+        
+        return current_version
+    
+    @staticmethod
+    def migration_001_create_migrations_table():
+        """Migration 1: Create schema_migrations tracking table"""
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                migration_id SERIAL PRIMARY KEY,
+                version INTEGER NOT NULL UNIQUE,
+                description VARCHAR(255) NOT NULL,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """, fetch=False)
+        
+        execute_query(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (1, 'Create schema_migrations table', %s)",
+            (datetime.now(),),
+            fetch=False
+        )
+    
+    @staticmethod
+    def migration_002_create_core_tables():
+        """Migration 2: Create core application tables"""
+        # Users table
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password_hash VARCHAR(64) NOT NULL,
+                salt VARCHAR(32) NOT NULL,
+                role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP,
+                login_attempts INTEGER DEFAULT 0,
+                lockout_until TIMESTAMP,
+                settings JSONB DEFAULT '{}'::JSONB,
+                CONSTRAINT username_length CHECK (char_length(username) >= 3 AND char_length(username) <= 20),
+                CONSTRAINT username_format CHECK (username ~ '^[a-zA-Z0-9_]+$')
+            )
+        """, fetch=False)
+        
+        # Indexes for users
+        for idx in [
+            "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)",
+            "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+            "CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active)"
+        ]:
+            execute_query(idx, fetch=False)
+        
+        # Tax planning table
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS tax_planning_years (
+                record_id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                year INTEGER NOT NULL,
+                data JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT unique_user_year UNIQUE(user_id, year),
+                CONSTRAINT valid_year CHECK (year >= 2020 AND year <= 2100)
+            )
+        """, fetch=False)
+        
+        execute_query(
+            "CREATE INDEX IF NOT EXISTS idx_tax_planning_user_id ON tax_planning_years(user_id)",
+            fetch=False
+        )
+        
+        # Sessions table
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                session_id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                session_token VARCHAR(64) UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active BOOLEAN DEFAULT TRUE
+            )
+        """, fetch=False)
+        
+        # Login history
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS login_history (
+                history_id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                success BOOLEAN NOT NULL,
+                failure_reason VARCHAR(255)
+            )
+        """, fetch=False)
+        
+        DatabaseMigration.record_migration(2, 'Create core tables')
+    
+    @staticmethod
+    def migration_003_add_phase2_tables():
+        """Migration 3: Add Phase 2 feature tables (email verification, admin audit)"""
+        # Email verification tokens
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS email_verification_tokens (
+                token_id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                token VARCHAR(64) UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                used BOOLEAN DEFAULT FALSE,
+                used_at TIMESTAMP
+            )
+        """, fetch=False)
+        
+        # Password reset tokens
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                token_id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                token VARCHAR(64) UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                used BOOLEAN DEFAULT FALSE,
+                used_at TIMESTAMP
+            )
+        """, fetch=False)
+        
+        # Admin audit log
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS admin_audit_log (
+                log_id SERIAL PRIMARY KEY,
+                admin_user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                action VARCHAR(100) NOT NULL,
+                target_user_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
+                details JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """, fetch=False)
+        
+        DatabaseMigration.record_migration(3, 'Add Phase 2 tables')
+
+# Initialize database with auto-migrations
+@st.cache_resource
+def initialize_database():
+    """Initialize database - creates tables automatically on first run!"""
+    try:
+        with st.spinner("🔄 Initializing database..."):
+            final_version = DatabaseMigration.run_migrations()
+        st.success(f"✅ Database ready! Schema version: {final_version}")
+        return True
+    except Exception as e:
+        st.error(f"❌ Database initialization failed: {e}")
+        return False
+
+# Run migrations automatically
+initialize_database()
 
 # ============================================================================
 # AUTHENTICATION FUNCTIONS
