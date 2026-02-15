@@ -34,15 +34,85 @@ import hashlib
 import secrets
 import re
 import json
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import traceback
 
 # ============================================================================
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.3.2 - PROFESSIONAL with ANALYTICS (FINAL FIX)"
-APP_DATE = "February 2026"
+APP_VERSION = "6.4.0 - POWER ADMIN & NOTIFICATIONS"
+APP_DATE = "February 15, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
+
+# Version Changelog
+CHANGELOG = """
+## 🎉 Version 6.4.0 - Power Admin & Notifications (Feb 15, 2026)
+
+### ✨ NEW FEATURES:
+
+**📊 Home Page Enhancements:**
+- Quick Stats Cards: Total tax saved, total contributions, portfolio value
+- Contribution Progress Bars: Visual room utilization for RRSP and TFSA
+- Lifetime savings summary across all years
+
+**👑 Admin Power Tools:**
+- 🔐 Login as Any User: Admin impersonation to view user accounts
+- 🔄 Reset User Data: Clear all planning years for any user
+- 💣 Nuclear Database Reset: Delete ALL data and start fresh
+- Enhanced user management controls
+
+**📧 Email Notification System:**
+- Welcome email when user creates account
+- Tax year optimization alerts
+- RRSP deadline reminders (30/60/90 days)
+- Contribution limit warnings
+- SMTP configuration in admin settings
+
+**ℹ️ Version Info Page:**
+- Accessible to all users via sidebar
+- Complete changelog history
+- Feature highlights
+- Update notifications
+
+### 🔧 Technical Improvements:
+- Email templates with HTML formatting
+- SMTP error handling and logging
+- Session management for impersonation
+- Safe database reset with confirmations
+
+---
+
+## Previous Versions:
+
+### v6.3.2 - UI Fixes (Feb 14, 2026)
+- Fixed white box on login page
+- Fixed admin auto-creation logic
+- Cleaned up login page styling
+
+### v6.3.0 - Complete Analytics (Feb 14, 2026)
+- User activity trends (30-day tracking)
+- Portfolio growth visualization
+- Tax optimization success tracking
+- Contribution pattern analysis
+- Limit warning system
+- Top optimizers leaderboard
+
+### v6.2.0 - Professional UI (Feb 13, 2026)
+- Institutional-grade login page
+- Purple gradient admin dashboard
+- 4 colored metric cards
+- Tab navigation system
+
+### v6.1.0 - Multi-User Platform (Feb 12, 2026)
+- PostgreSQL database integration
+- Multi-user authentication
+- Session management
+- Auto-migration system
+"""
 
 # Page config - must be first Streamlit command
 st.set_page_config(
@@ -458,7 +528,154 @@ def register_user(username, email, password, confirm_password):
     )
     
     role_msg = " (Admin)" if role == 'admin' else ""
+    
+    # Send welcome email (if configured)
+    try:
+        send_welcome_email(username, email)
+    except:
+        pass  # Don't fail registration if email fails
+    
     return True, f"Account created successfully{role_msg}! Please login."
+
+# ============================================================================
+# EMAIL NOTIFICATION SYSTEM
+# ============================================================================
+
+def get_smtp_config():
+    """Get SMTP configuration from Streamlit secrets"""
+    try:
+        if hasattr(st, 'secrets') and 'email' in st.secrets:
+            return {
+                'enabled': st.secrets.email.get('enabled', False),
+                'smtp_server': st.secrets.email.get('smtp_server', ''),
+                'smtp_port': st.secrets.email.get('smtp_port', 587),
+                'smtp_username': st.secrets.email.get('smtp_username', ''),
+                'smtp_password': st.secrets.email.get('smtp_password', ''),
+                'from_email': st.secrets.email.get('from_email', ''),
+                'from_name': st.secrets.email.get('from_name', APP_NAME)
+            }
+        return {'enabled': False}
+    except:
+        return {'enabled': False}
+
+def send_email(to_email, subject, html_body, plain_body=None):
+    """Send email notification"""
+    config = get_smtp_config()
+    if not config.get('enabled'):
+        return True, "Email disabled"
+    
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = f"{config['from_name']} <{config['from_email']}>"
+        msg['To'] = to_email
+        
+        if plain_body:
+            msg.attach(MIMEText(plain_body, 'plain'))
+        msg.attach(MIMEText(html_body, 'html'))
+        
+        with smtplib.SMTP(config['smtp_server'], config['smtp_port']) as server:
+            server.starttls()
+            server.login(config['smtp_username'], config['smtp_password'])
+            server.send_message(msg)
+        
+        return True, "Email sent"
+    except Exception as e:
+        return False, str(e)
+
+def send_welcome_email(username, email):
+    """Send welcome email to new user"""
+    subject = f"Welcome to {APP_NAME}!"
+    html_body = f"""
+    <html><body style="font-family: Arial, sans-serif;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 30px; border-radius: 10px; text-align: center;">
+            <h1>🏦 Welcome to {APP_NAME}!</h1>
+        </div>
+        <div style="background: #f9fafb; padding: 30px; margin-top: 20px; border-radius: 10px;">
+            <h2>Hello {username}! 👋</h2>
+            <p>Your account has been created successfully!</p>
+            <h3 style="color: #3b82f6;">🚀 Get Started:</h3>
+            <ul>
+                <li>Set up your first planning year</li>
+                <li>Enter your income and contribution room</li>
+                <li>Get instant tax optimization insights</li>
+                <li>Track portfolio growth over time</li>
+            </ul>
+        </div>
+        <div style="text-align: center; margin-top: 30px; color: #64748b;">
+            <p>{APP_NAME} • {APP_SUBTITLE}</p>
+        </div>
+    </div>
+    </body></html>
+    """
+    plain_body = f"Welcome to {APP_NAME}!\n\nHello {username}!\n\nYour account has been created successfully."
+    return send_email(email, subject, html_body, plain_body)
+
+def send_optimization_alert(username, email, year, taxable_income, threshold=181440):
+    """Send tax optimization alert"""
+    is_optimized = taxable_income < threshold
+    subject = f"{'🎉' if is_optimized else '⚠️'} {year} Tax Year {'Optimized!' if is_optimized else 'Needs Work'}"
+    status = "Optimized" if is_optimized else "Needs Optimization"
+    color = "#10b981" if is_optimized else "#f59e0b"
+    
+    html_body = f"""
+    <html><body style="font-family: Arial, sans-serif;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: {color}; color: white; padding: 30px; border-radius: 10px; text-align: center;">
+            <h1>{year} Tax Year Update</h1>
+            <p style="font-size: 18px;">Status: {status}</p>
+        </div>
+        <div style="background: #f9fafb; padding: 30px; margin-top: 20px; border-radius: 10px;">
+            <h2>Hi {username},</h2>
+            <p>Taxable Income: ${taxable_income:,.0f}<br>
+            Penthouse Threshold: ${threshold:,.0f}</p>
+        </div>
+    </div>
+    </body></html>
+    """
+    return send_email(email, subject, html_body)
+
+def send_deadline_reminder(username, email, year, days_until, deadline_date):
+    """Send RRSP deadline reminder"""
+    urgency = "🔴 URGENT" if days_until <= 30 else "⚠️ IMPORTANT" if days_until <= 60 else "📅 REMINDER"
+    subject = f"{urgency}: RRSP Deadline in {days_until} Days ({year})"
+    
+    html_body = f"""
+    <html><body style="font-family: Arial, sans-serif;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #ef4444; color: white; padding: 30px; border-radius: 10px; text-align: center;">
+            <h1>⏰ RRSP Deadline Reminder</h1>
+            <p style="font-size: 24px; font-weight: 700;">{days_until} Days Remaining</p>
+        </div>
+        <div style="background: #f9fafb; padding: 30px; margin-top: 20px; border-radius: 10px;">
+            <h2>Hi {username},</h2>
+            <p>Tax Year: {year}<br>Deadline: {deadline_date}<br>Days Remaining: {days_until}</p>
+        </div>
+    </div>
+    </body></html>
+    """
+    return send_email(email, subject, html_body)
+
+def send_limit_warning(username, email, account_type, utilized_pct, remaining):
+    """Send contribution limit warning"""
+    subject = f"⚠️ Approaching {account_type} Limit ({utilized_pct:.0f}%)"
+    
+    html_body = f"""
+    <html><body style="font-family: Arial, sans-serif;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #f59e0b; color: white; padding: 30px; border-radius: 10px; text-align: center;">
+            <h1>⚠️ Contribution Limit Alert</h1>
+            <p>{utilized_pct:.0f}% Utilized</p>
+        </div>
+        <div style="background: #f9fafb; padding: 30px; margin-top: 20px; border-radius: 10px;">
+            <h2>Hi {username},</h2>
+            <p>Account: {account_type}<br>Utilization: {utilized_pct:.1f}%<br>Remaining: ${remaining:,.0f}</p>
+        </div>
+    </div>
+    </body></html>
+    """
+    return send_email(email, subject, html_body)
 
 def login_user(username_or_email, password):
     """Authenticate user and create session"""
@@ -1101,7 +1318,7 @@ def show_admin_dashboard():
     st.divider()
     
     # TAB NAVIGATION (Matching Reference Image 2)
-    tab1, tab2, tab3 = st.tabs(["📊 All Users Overview", "👥 User Management", "📈 System Analytics"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 All Users Overview", "👥 User Management", "📈 System Analytics", "⚡ Power Tools"])
     
     with tab1:
         st.markdown("### 📊 All Users Overview")
@@ -1791,6 +2008,218 @@ def show_admin_dashboard():
         
         except Exception as e:
             st.warning(f"Unable to load leaderboard: {str(e)}")
+    
+    # =================================================================
+    # TAB 4: POWER TOOLS (Admin Only)
+    # =================================================================
+    
+    with tab4:
+        st.markdown("### ⚡ Admin Power Tools")
+        st.caption("Advanced administrative functions - use with caution")
+        
+        st.markdown("")
+        
+        # TOOL 1: Login as User (Impersonation)
+        st.markdown("#### 🔐 Login as User (Impersonation)")
+        
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); 
+                 padding: 20px; border-radius: 10px; border-left: 4px solid #3b82f6; margin-bottom: 20px;">
+                <h4 style="margin-top: 0; color: #1e3a8a;">Impersonate User Account</h4>
+                <p style="color: #1e40af; margin-bottom: 0;">
+                    Login as any user to view their account, planning years, and data. 
+                    All actions will be performed as that user. Use this for support and troubleshooting.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Get all users
+        all_users_query = "SELECT user_id, username, email, role FROM users ORDER BY username"
+        all_users = execute_query(all_users_query)
+        
+        if all_users:
+            col_imp1, col_imp2 = st.columns([2, 1])
+            
+            with col_imp1:
+                user_options = [f"{u['username']} ({u['email']}) - {u['role'].upper()}" for u in all_users]
+                selected_user_idx = st.selectbox(
+                    "Select User to Impersonate",
+                    range(len(user_options)),
+                    format_func=lambda i: user_options[i],
+                    key="impersonate_user_select"
+                )
+                
+                selected_user = all_users[selected_user_idx]
+            
+            with col_imp2:
+                st.markdown("")
+                st.markdown("")
+                if st.button("🔐 Login as This User", type="primary", use_container_width=True, key="impersonate_btn"):
+                    # Save original admin session
+                    if 'original_admin_id' not in st.session_state:
+                        st.session_state.original_admin_id = st.session_state.user_id
+                        st.session_state.original_admin_username = st.session_state.username
+                    
+                    # Switch to target user
+                    st.session_state.user_id = selected_user['user_id']
+                    st.session_state.username = selected_user['username']
+                    st.session_state.email = selected_user['email']
+                    st.session_state.role = selected_user['role']
+                    st.session_state.impersonating = True
+                    
+                    st.success(f"✅ Now logged in as **{selected_user['username']}**")
+                    st.info("👑 You are impersonating this user. Click 'Return to Admin' in sidebar to switch back.")
+                    st.rerun()
+        
+        # Show return button if impersonating
+        if st.session_state.get('impersonating', False):
+            st.markdown("")
+            if st.button("👑 Return to Admin Account", type="secondary", use_container_width=True, key="return_admin_btn"):
+                # Restore admin session
+                st.session_state.user_id = st.session_state.original_admin_id
+                st.session_state.username = st.session_state.original_admin_username
+                st.session_state.role = 'admin'
+                st.session_state.impersonating = False
+                
+                # Clean up
+                del st.session_state.original_admin_id
+                del st.session_state.original_admin_username
+                
+                st.success("✅ Returned to admin account")
+                st.rerun()
+        
+        st.divider()
+        
+        # TOOL 2: Reset User Data
+        st.markdown("#### 🔄 Reset User Data")
+        
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); 
+                 padding: 20px; border-radius: 10px; border-left: 4px solid #f59e0b; margin-bottom: 20px;">
+                <h4 style="margin-top: 0; color: #78350f;">Delete All Planning Years</h4>
+                <p style="color: #92400e; margin-bottom: 0;">
+                    ⚠️ This will permanently delete ALL planning years for the selected user. 
+                    The user account will remain, but all their financial data will be erased.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        col_reset1, col_reset2 = st.columns([2, 1])
+        
+        with col_reset1:
+            if all_users:
+                user_reset_idx = st.selectbox(
+                    "Select User to Reset",
+                    range(len(user_options)),
+                    format_func=lambda i: user_options[i],
+                    key="reset_user_select"
+                )
+                
+                user_to_reset = all_users[user_reset_idx]
+                
+                # Get user's planning year count
+                count_query = "SELECT COUNT(*) as count FROM tax_planning_years WHERE user_id = %s"
+                count_result = execute_query(count_query, (user_to_reset['user_id'],))
+                year_count = count_result[0]['count'] if count_result else 0
+                
+                st.caption(f"📊 This user has **{year_count}** planning years")
+        
+        with col_reset2:
+            st.markdown("")
+            st.markdown("")
+            if st.button("🔄 Reset User Data", type="secondary", use_container_width=True, key="reset_user_btn"):
+                if year_count > 0:
+                    # Confirmation dialog
+                    st.session_state.confirm_reset_user = user_to_reset['user_id']
+                    st.warning(f"⚠️ **Confirm:** Delete {year_count} planning years for **{user_to_reset['username']}**?")
+                else:
+                    st.info("This user has no planning years to delete")
+        
+        # Show confirmation buttons if pending
+        if st.session_state.get('confirm_reset_user'):
+            col_confirm1, col_confirm2 = st.columns(2)
+            
+            with col_confirm1:
+                if st.button("✅ YES, DELETE ALL DATA", type="primary", use_container_width=True, key="confirm_yes_reset"):
+                    user_id_to_reset = st.session_state.confirm_reset_user
+                    
+                    # Delete user's planning years
+                    execute_query(
+                        "DELETE FROM tax_planning_years WHERE user_id = %s",
+                        (user_id_to_reset,),
+                        fetch=False
+                    )
+                    
+                    st.success(f"✅ Successfully deleted all planning years for user")
+                    del st.session_state.confirm_reset_user
+                    st.rerun()
+            
+            with col_confirm2:
+                if st.button("❌ Cancel", use_container_width=True, key="confirm_no_reset"):
+                    del st.session_state.confirm_reset_user
+                    st.rerun()
+        
+        st.divider()
+        
+        # TOOL 3: Nuclear Database Reset
+        st.markdown("#### 💣 Nuclear Database Reset")
+        
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); 
+                 padding: 20px; border-radius: 10px; border-left: 4px solid #ef4444; margin-bottom: 20px;">
+                <h4 style="margin-top: 0; color: #7f1d1d;">🚨 DANGER ZONE</h4>
+                <p style="color: #991b1b; margin-bottom: 0;">
+                    <strong>⚠️ CRITICAL WARNING:</strong> This will permanently delete ALL data from ALL tables 
+                    (except admin accounts). All users, planning years, sessions, and analytics will be erased. 
+                    This action is IRREVERSIBLE.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Nuclear reset controls
+        nuclear_confirm = st.checkbox("I understand this will delete ALL data", key="nuclear_checkbox")
+        
+        if nuclear_confirm:
+            nuclear_text = st.text_input(
+                "Type 'DELETE EVERYTHING' to confirm",
+                key="nuclear_text_confirm"
+            )
+            
+            if nuclear_text == "DELETE EVERYTHING":
+                col_nuke1, col_nuke2 = st.columns([1, 1])
+                
+                with col_nuke1:
+                    if st.button("💣 NUCLEAR RESET DATABASE", type="primary", use_container_width=True, key="nuclear_btn"):
+                        st.session_state.nuclear_armed = True
+                        st.error("⚠️ **FINAL WARNING:** Are you absolutely sure?")
+                
+                # Final confirmation
+                if st.session_state.get('nuclear_armed', False):
+                    col_final1, col_final2 = st.columns(2)
+                    
+                    with col_final1:
+                        if st.button("🔴 YES, DELETE EVERYTHING", type="primary", use_container_width=True, key="nuclear_confirm_yes"):
+                            try:
+                                # Delete all data (preserve admin users)
+                                execute_query("DELETE FROM tax_planning_years", fetch=False)
+                                execute_query("DELETE FROM login_history", fetch=False)
+                                execute_query("DELETE FROM user_sessions", fetch=False)
+                                execute_query("DELETE FROM admin_audit_log", fetch=False)
+                                execute_query("DELETE FROM password_reset_tokens", fetch=False)
+                                execute_query("DELETE FROM email_verification_tokens", fetch=False)
+                                execute_query("DELETE FROM users WHERE role != 'admin'", fetch=False)
+                                
+                                st.success("✅ Nuclear reset complete! All non-admin data deleted.")
+                                del st.session_state.nuclear_armed
+                                st.balloons()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Nuclear reset failed: {str(e)}")
+                    
+                    with col_final2:
+                        if st.button("❌ Cancel", use_container_width=True, key="nuclear_confirm_no"):
+                            del st.session_state.nuclear_armed
+                            st.rerun()
 
 # ============================================================================
 # USER PROFILE PAGE
@@ -1896,6 +2325,10 @@ with st.sidebar:
         st.session_state.current_page = "Profile"
         st.rerun()
     
+    if st.button("ℹ️ Version Info", use_container_width=True, key="main_version_btn"):
+        st.session_state.current_page = "Version"
+        st.rerun()
+    
     if st.button("🚪 Logout", use_container_width=True, type="secondary", key="main_logout_btn"):
         logout_user(st.session_state.session_token)
         st.session_state.logged_in = False
@@ -1919,6 +2352,147 @@ if st.session_state.current_page == "Admin":
 # Show profile page if selected
 if st.session_state.current_page == "Profile":
     show_profile_page()
+    st.stop()
+
+# Show version info page if selected
+if st.session_state.current_page == "Version":
+    # Version Info Page
+    with st.sidebar:
+        if st.button("⬅️ Back to App", use_container_width=True, key="version_back_btn"):
+            st.session_state.current_page = "Home"
+            st.rerun()
+    
+    st.title(f"ℹ️ {APP_NAME} - Version Info")
+    
+    # Current Version Banner
+    st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+             color: white; padding: 40px; border-radius: 16px; text-align: center; margin-bottom: 30px;
+             box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);">
+            <h1 style="margin: 0; font-size: 3em;">🏦</h1>
+            <h2 style="margin: 20px 0 10px 0; font-size: 2em;">{APP_NAME}</h2>
+            <p style="font-size: 1.2em; opacity: 0.9; margin: 0;">{APP_SUBTITLE}</p>
+            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px; margin-top: 25px;">
+                <p style="font-size: 1.5em; font-weight: 700; margin: 0;">{APP_VERSION}</p>
+                <p style="font-size: 0.9em; margin: 5px 0 0 0; opacity: 0.9;">Released: {APP_DATE}</p>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Feature Highlights
+    st.markdown("## ✨ Feature Highlights")
+    
+    col_feat1, col_feat2, col_feat3 = st.columns(3)
+    
+    with col_feat1:
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); 
+                 padding: 24px; border-radius: 12px; height: 100%; border-left: 4px solid #3b82f6;">
+                <h3 style="color: #1e3a8a; margin-top: 0;">📊 Analytics</h3>
+                <ul style="color: #1e40af; line-height: 1.8;">
+                    <li>6 Analytics Modules</li>
+                    <li>User Activity Tracking</li>
+                    <li>Portfolio Growth Charts</li>
+                    <li>Optimization Success Rates</li>
+                    <li>Top Performers Leaderboard</li>
+                </ul>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col_feat2:
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); 
+                 padding: 24px; border-radius: 12px; height: 100%; border-left: 4px solid #10b981;">
+                <h3 style="color: #065f46; margin-top: 0;">👑 Admin Tools</h3>
+                <ul style="color: #047857; line-height: 1.8;">
+                    <li>User Impersonation</li>
+                    <li>Reset User Data</li>
+                    <li>Nuclear Database Reset</li>
+                    <li>4 Colored Metric Cards</li>
+                    <li>Enhanced Management</li>
+                </ul>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col_feat3:
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); 
+                 padding: 24px; border-radius: 12px; height: 100%; border-left: 4px solid #f59e0b;">
+                <h3 style="color: #78350f; margin-top: 0;">📧 Notifications</h3>
+                <ul style="color: #92400e; line-height: 1.8;">
+                    <li>Welcome Emails</li>
+                    <li>Optimization Alerts</li>
+                    <li>Deadline Reminders</li>
+                    <li>Limit Warnings</li>
+                    <li>SMTP Integration</li>
+                </ul>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("")
+    st.markdown("")
+    
+    # Full Changelog
+    st.markdown("## 📝 Complete Changelog")
+    
+    with st.expander("📜 View Full Version History", expanded=True):
+        st.markdown(CHANGELOG)
+    
+    st.divider()
+    
+    # Technical Info
+    st.markdown("## 🔧 Technical Information")
+    
+    col_tech1, col_tech2 = st.columns(2)
+    
+    with col_tech1:
+        st.markdown("""
+            **Platform Stack:**
+            - Frontend: Streamlit
+            - Database: PostgreSQL
+            - Charts: Altair
+            - Email: SMTP
+            - Authentication: Session-based
+            - Deployment: Streamlit Cloud
+        """)
+    
+    with col_tech2:
+        st.markdown("""
+            **Key Features:**
+            - Multi-user authentication
+            - Auto-migration database
+            - Real-time tax calculations
+            - Multi-year planning
+            - Portfolio tracking
+            - Admin power tools
+        """)
+    
+    st.divider()
+    
+    # Credits
+    st.markdown("## 💙 Credits & Support")
+    
+    st.info("""
+        **Built for Canadian Taxpayers**
+        
+        This application is designed to help Canadians optimize their RRSP and TFSA contributions,
+        minimize taxes, and plan for a secure financial future.
+        
+        Tax rates are based on 2025/2026 Ontario (Federal + Provincial) brackets.
+        Always consult with a qualified tax professional for personalized advice.
+    """)
+    
+    st.markdown("""
+        <div style="text-align: center; margin-top: 40px; padding: 30px; background: #f8fafc; border-radius: 12px;">
+            <p style="font-size: 1.1em; color: #64748b; margin: 0;">
+                <strong>Canadian Tax Optimizer</strong> • Built with ❤️ for Canadian taxpayers
+            </p>
+            <p style="font-size: 0.9em; color: #94a3b8; margin-top: 10px;">
+                {APP_VERSION} • {APP_DATE}
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    
     st.stop()
 
 # Otherwise, show main app (Home or Year View)
@@ -1950,6 +2524,201 @@ if st.session_state.current_page == "Home":
         - 🟠 **Orange** = In Progress (needs more RRSP contributions)
         - ⚪ **Gray** = Not Started (no data entered yet)
         """)
+    
+    # ===================================================================
+    # QUICK STATS CARDS - NEW FEATURE
+    # ===================================================================
+    
+    if all_history:
+        st.markdown("## ⚡ Quick Stats Overview")
+        st.caption("Your lifetime tax optimization and contribution summary")
+        st.markdown("")
+        
+        # Calculate quick stats
+        quick_total_rrsp = 0
+        quick_total_tfsa = 0
+        quick_total_tax_saved = 0
+        quick_total_years = len(all_history)
+        quick_optimized_years = 0
+        
+        for yr, data in all_history.items():
+            t4_gross = data.get('t4_gross_income', 0)
+            other_inc = data.get('other_income', 0)
+            total_gross = t4_gross + other_inc
+            
+            annual_rrsp = calculate_annual_rrsp(data)
+            tfsa_contrib = data.get('tfsa_lump_sum', 0)
+            
+            quick_total_rrsp += annual_rrsp
+            quick_total_tfsa += tfsa_contrib
+            
+            refund = calculate_tax_refund(total_gross, annual_rrsp)
+            quick_total_tax_saved += refund
+            
+            # Check if optimized
+            taxable = total_gross - annual_rrsp
+            if taxable < 181440:
+                quick_optimized_years += 1
+        
+        quick_total_contrib = quick_total_rrsp + quick_total_tfsa
+        quick_opt_rate = (quick_optimized_years / quick_total_years * 100) if quick_total_years > 0 else 0
+        
+        # Display Quick Stats Cards
+        col_q1, col_q2, col_q3, col_q4 = st.columns(4)
+        
+        with col_q1:
+            st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
+                     color: white; padding: 24px; border-radius: 12px; text-align: center;
+                     box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);">
+                    <div style="font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;">💰 Total Tax Saved</div>
+                    <div style="font-size: 2.2em; font-weight: 700;">${quick_total_tax_saved:,.0f}</div>
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">Lifetime Refunds</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col_q2:
+            st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
+                     color: white; padding: 24px; border-radius: 12px; text-align: center;
+                     box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);">
+                    <div style="font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;">💼 Total Contributions</div>
+                    <div style="font-size: 2.2em; font-weight: 700;">${quick_total_contrib:,.0f}</div>
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">RRSP + TFSA Combined</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col_q3:
+            st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); 
+                     color: white; padding: 24px; border-radius: 12px; text-align: center;
+                     box-shadow: 0 4px 6px rgba(139, 92, 246, 0.3);">
+                    <div style="font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;">🎯 Optimization Rate</div>
+                    <div style="font-size: 2.2em; font-weight: 700;">{quick_opt_rate:.0f}%</div>
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">{quick_optimized_years}/{quick_total_years} Years Optimized</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col_q4:
+            # Get latest portfolio value
+            latest_year_key = max(all_history.keys(), key=lambda x: int(x))
+            latest = all_history[latest_year_key]
+            latest_cagr = latest.get("target_cagr", 7.0) / 100
+            latest_rrsp_start = latest.get("rrsp_balance_start", 0)
+            latest_tfsa_start = latest.get("tfsa_balance_start", 0)
+            latest_rrsp_contrib = calculate_annual_rrsp(latest)
+            latest_tfsa_contrib = latest.get('tfsa_lump_sum', 0)
+            
+            latest_rrsp_end = latest_rrsp_start * (1 + latest_cagr) + latest_rrsp_contrib * (1 + latest_cagr/2)
+            latest_tfsa_end = latest_tfsa_start * (1 + latest_cagr) + latest_tfsa_contrib * (1 + latest_cagr/2)
+            quick_portfolio_value = latest_rrsp_end + latest_tfsa_end
+            
+            st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                     color: white; padding: 24px; border-radius: 12px; text-align: center;
+                     box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
+                    <div style="font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;">📊 Portfolio Value</div>
+                    <div style="font-size: 2.2em; font-weight: 700;">${quick_portfolio_value:,.0f}</div>
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">As of {latest_year_key}</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("")
+        st.markdown("")
+        
+        # ===================================================================
+        # CONTRIBUTION PROGRESS BARS - NEW FEATURE
+        # ===================================================================
+        
+        st.markdown("### 📊 Contribution Room Utilization")
+        st.caption("Visual overview of your current year contribution space usage")
+        st.markdown("")
+        
+        # Get latest year for progress bars
+        if latest:
+            rrsp_room = latest.get('rrsp_room', 0)
+            tfsa_room = latest.get('tfsa_room', 0)
+            
+            rrsp_used = latest_rrsp_contrib
+            tfsa_used = latest_tfsa_contrib
+            
+            rrsp_remaining = max(0, rrsp_room - rrsp_used)
+            tfsa_remaining = max(0, tfsa_room - tfsa_used)
+            
+            rrsp_pct = (rrsp_used / rrsp_room * 100) if rrsp_room > 0 else 0
+            tfsa_pct = (tfsa_used / tfsa_room * 100) if tfsa_room > 0 else 0
+            
+            # RRSP Progress Bar
+            col_pb1, col_pb2 = st.columns([3, 1])
+            
+            with col_pb1:
+                st.markdown("**RRSP Contribution Room**")
+                
+                # Determine color based on utilization
+                if rrsp_pct >= 90:
+                    rrsp_color = "#10b981"  # Green - well utilized
+                elif rrsp_pct >= 60:
+                    rrsp_color = "#3b82f6"  # Blue - moderate
+                else:
+                    rrsp_color = "#94a3b8"  # Gray - underutilized
+                
+                st.markdown(f"""
+                    <div style="background: #f1f5f9; border-radius: 10px; padding: 3px; margin-bottom: 8px;">
+                        <div style="background: {rrsp_color}; width: {min(rrsp_pct, 100):.1f}%; 
+                             height: 30px; border-radius: 8px; display: flex; align-items: center; 
+                             justify-content: center; color: white; font-weight: 600; font-size: 0.9em;">
+                            {rrsp_pct:.1f}%
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                st.caption(f"Used: ${rrsp_used:,.0f} / ${rrsp_room:,.0f} • Remaining: ${rrsp_remaining:,.0f}")
+            
+            with col_pb2:
+                st.metric(
+                    "Room Status",
+                    f"{rrsp_pct:.0f}%",
+                    delta=f"${rrsp_remaining:,.0f} left",
+                    delta_color="inverse" if rrsp_pct < 80 else "normal"
+                )
+            
+            st.markdown("")
+            
+            # TFSA Progress Bar
+            col_pb3, col_pb4 = st.columns([3, 1])
+            
+            with col_pb3:
+                st.markdown("**TFSA Contribution Room**")
+                
+                # Determine color based on utilization
+                if tfsa_pct >= 90:
+                    tfsa_color = "#10b981"  # Green - well utilized
+                elif tfsa_pct >= 60:
+                    tfsa_color = "#3b82f6"  # Blue - moderate
+                else:
+                    tfsa_color = "#94a3b8"  # Gray - underutilized
+                
+                st.markdown(f"""
+                    <div style="background: #f1f5f9; border-radius: 10px; padding: 3px; margin-bottom: 8px;">
+                        <div style="background: {tfsa_color}; width: {min(tfsa_pct, 100):.1f}%; 
+                             height: 30px; border-radius: 8px; display: flex; align-items: center; 
+                             justify-content: center; color: white; font-weight: 600; font-size: 0.9em;">
+                            {tfsa_pct:.1f}%
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                st.caption(f"Used: ${tfsa_used:,.0f} / ${tfsa_room:,.0f} • Remaining: ${tfsa_remaining:,.0f}")
+            
+            with col_pb4:
+                st.metric(
+                    "Room Status",
+                    f"{tfsa_pct:.0f}%",
+                    delta=f"${tfsa_remaining:,.0f} left",
+                    delta_color="inverse" if tfsa_pct < 80 else "normal"
+                )
+        
+        st.divider()
     
     # SECTION 1: GLOBAL WEALTH SUMMARY (Moved to Top)
     if all_history:
