@@ -39,7 +39,7 @@ import json
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.3.1 - PROFESSIONAL with ANALYTICS (UI Fixed)"
+APP_VERSION = "6.3.2 - PROFESSIONAL with ANALYTICS (FINAL FIX)"
 APP_DATE = "February 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
@@ -856,78 +856,53 @@ def is_year_optimized(year_data):
 def show_auth_page():
     """Display professional institutional-grade login page"""
     
-    # AUTO-CREATE DEFAULT ADMIN if no users exist
+    # AUTO-CREATE DEFAULT ADMIN if 'admin' user doesn't exist
     try:
-        users_count = execute_query("SELECT COUNT(*) as count FROM users", show_error=False)
-        if users_count and users_count[0]['count'] == 0:
-            # No users exist - create default admin
-            admin_username = "admin"
-            admin_email = "admin@taxoptimizer.local"
+        admin_check = execute_query(
+            "SELECT COUNT(*) as count FROM users WHERE username = 'admin'", 
+            show_error=False
+        )
+        
+        if admin_check and admin_check[0]['count'] == 0:
+            # 'admin' user doesn't exist - create it now
             admin_password = "admin123"
+            password_hash, salt = hash_password(admin_password)
             
-            # Hash password
-            salt = secrets.token_hex(16)
-            password_hash = hashlib.sha256((admin_password + salt).encode()).hexdigest()
-            
-            # Create admin account
             execute_query("""
                 INSERT INTO users (username, email, password_hash, salt, role, is_active, created_at)
                 VALUES (%s, %s, %s, %s, 'admin', TRUE, %s)
-            """, (admin_username, admin_email, password_hash, salt, datetime.now()), fetch=False)
+            """, ('admin', 'admin@taxoptimizer.local', password_hash, salt, datetime.now()), 
+            fetch=False, show_error=False)
     except Exception:
-        # Tables might not exist yet, or other error - ignore
+        # Tables might not exist yet - ignore
         pass
     
-    # Professional animated header
+    # Professional header with icon and title
     st.markdown(f"""
-        <style>
-        @keyframes float {{
-            0%, 100% {{ transform: translateY(0px); }}
-            50% {{ transform: translateY(-10px); }}
-        }}
-        .login-container {{
-            max-width: 650px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }}
-        .login-card {{
-            background: white;
-            padding: 48px 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e2e8f0;
-            max-width: 650px;
-            margin: 0 auto;
-        }}
-        </style>
-        
         <div style="text-align: center; padding: 60px 0 40px 0;">
-            <div style="font-size: 5em; margin-bottom: 20px; animation: float 3s ease-in-out infinite;">🏦</div>
+            <div style="font-size: 5em; margin-bottom: 20px;">🏦</div>
             <h1 style="font-size: 2.8em; font-weight: 800; color: #1e293b; margin-bottom: 12px; letter-spacing: -0.5px;">
                 {APP_NAME}
             </h1>
-            <p style="font-size: 1.15em; color: #64748b; font-weight: 500; margin-bottom: 10px;">
+            <p style="font-size: 1.15em; color: #64748b; font-weight: 500; margin-bottom: 40px;">
                 {APP_SUBTITLE}
             </p>
         </div>
     """, unsafe_allow_html=True)
-    
-    # Centered login card using CSS (NO EMPTY COLUMNS!)
-    st.markdown('<div class="login-card">', unsafe_allow_html=True)
     
     tab1, tab2 = st.tabs(["🔐 Sign In", "📝 Create Account"])
     
     # LOGIN TAB
     with tab1:
         st.markdown("### Sign In to Your Account")
+        st.markdown("")
         
         with st.form("login_form"):
-            username_or_email = st.text_input("Username or Email", placeholder="Enter your username or email")
-            password = st.text_input("Password", type="password", placeholder="Enter your password")
+            username_or_email = st.text_input("Username or Email", placeholder="Enter your username or email", key="login_user")
+            password = st.text_input("Password", type="password", placeholder="Enter your password", key="login_pass")
             
-            col_btn1, col_btn2 = st.columns([1, 1])
-            with col_btn1:
-                login_button = st.form_submit_button("🔐 Sign In", use_container_width=True, type="primary")
+            st.markdown("")
+            login_button = st.form_submit_button("🔐 Sign In", use_container_width=True, type="primary")
             
             if login_button:
                 if not username_or_email or not password:
@@ -950,19 +925,19 @@ def show_auth_page():
     # REGISTER TAB
     with tab2:
         st.markdown("### Create Your Account")
+        st.markdown("")
         
         with st.form("register_form"):
-            new_username = st.text_input("Username", placeholder="3-20 characters, letters and numbers")
-            new_email = st.text_input("Email Address", placeholder="your@email.com")
-            new_password = st.text_input("Password", type="password", placeholder="Minimum 8 characters")
-            confirm_password = st.text_input("Confirm Password", type="password", placeholder="Re-enter your password")
+            new_username = st.text_input("Username", placeholder="3-20 characters, letters and numbers", key="reg_user")
+            new_email = st.text_input("Email Address", placeholder="your@email.com", key="reg_email")
+            new_password = st.text_input("Password", type="password", placeholder="Minimum 8 characters", key="reg_pass")
+            confirm_password = st.text_input("Confirm Password", type="password", placeholder="Re-enter your password", key="reg_confirm")
             
-            register_button = st.form_submit_button("✨ Create Account", 
-                                                    use_container_width=True, type="primary")
+            st.markdown("")
+            register_button = st.form_submit_button("✨ Create Account", use_container_width=True, type="primary")
             
             if register_button:
-                success, message = register_user(new_username, new_email, 
-                                                 new_password, confirm_password)
+                success, message = register_user(new_username, new_email, new_password, confirm_password)
                 
                 if success:
                     st.success(f"✅ {message}")
@@ -970,30 +945,17 @@ def show_auth_page():
                 else:
                     st.error(f"❌ {message}")
     
-    # First time setup help - Professional expandable section
+    # First time setup help
+    st.markdown("")
     with st.expander("ℹ️ First time setup?", expanded=False):
-        st.markdown("""
-            <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); 
-                 padding: 24px; border-radius: 12px; border-left: 4px solid #3b82f6;">
-                <h4 style="margin-top: 0; color: #1e3a8a;">Default Admin Account</h4>
-                <p style="margin: 12px 0; color: #1e40af;">
-                    Use these credentials for first-time administrative access:
-                </p>
-                <div style="background: #f8fafc; padding: 16px; border-radius: 10px; 
-                     font-family: 'SF Mono', 'Monaco', 'Courier New', monospace; 
-                     margin: 12px 0; border: 1px solid #e2e8f0;">
-                    <div style="margin: 8px 0;"><strong>Username:</strong> <code style="background: #e0f2fe; padding: 4px 8px; border-radius: 4px;">admin</code></div>
-                    <div style="margin: 8px 0;"><strong>Password:</strong> <code style="background: #e0f2fe; padding: 4px 8px; border-radius: 4px;">admin123</code></div>
-                </div>
-                <div style="background: #fef3c7; padding: 12px; border-radius: 8px; border-left: 3px solid #f59e0b; margin-top: 16px;">
-                    <p style="margin: 0; color: #92400e; font-size: 0.95em;">
-                        <strong>⚠️ Security Notice:</strong> Change the admin password immediately after first login for security.
-                    </p>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.info("""
+            **Default Admin Account:**
+            
+            Username: `admin`  
+            Password: `admin123`
+            
+            ⚠️ **Important:** Change the admin password immediately after first login for security.
+        """)
     
     # Professional footer
     st.markdown(f"""
