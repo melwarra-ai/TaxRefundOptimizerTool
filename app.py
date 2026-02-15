@@ -1,16 +1,20 @@
 """
-TAX Optimization and TFSA Utilization
-Version 6.1.0 - COMPLETE Multi-User Edition with Auto-Migration
+Canadian Tax Optimizer - PROFESSIONAL EDITION
+Version 6.2.0 - Institutional-Grade UI
 
-Complete application with:
-- PostgreSQL authentication
-- Auto-database migration (creates tables automatically!)
-- All original tax planning features
-- Multi-year analytics and charts
-- Portfolio tracking
-- Strategic insights
+Professional application featuring:
+- ✨ Institutional-grade user interface (professional portfolio management design)
+- 👑 Advanced admin dashboard with 4 colored metric cards
+- 🎨 Professional login page with animated branding
+- 📊 Tab-based navigation and enhanced analytics
+- 🔐 Complete multi-user authentication system
+- 🔄 Auto-database migration (creates tables automatically!)
+- 💼 All tax optimization features (RRSP, TFSA, multi-year planning)
+- 📈 Portfolio tracking with growth projections
+- 💡 Strategic insights and recommendations
 
-Ready to deploy on Streamlit Cloud with Neon database
+Based on institutional portfolio management design principles
+Ready for enterprise deployment on Streamlit Cloud
 NO MANUAL SQL REQUIRED - Tables create automatically on first run!
 """
 
@@ -31,8 +35,10 @@ import json
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.1.0 - COMPLETE with Auto-Migration"
+APP_VERSION = "6.2.0 - PROFESSIONAL EDITION"
 APP_DATE = "February 2026"
+APP_NAME = "Canadian Tax Optimizer"
+APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Page config - must be first Streamlit command
 st.set_page_config(
@@ -808,33 +814,63 @@ def is_year_optimized(year_data):
 # ============================================================================
 
 def show_auth_page():
-    """Display login/register page"""
+    """Display professional institutional-grade login page"""
     
-    st.markdown("""
-        <div style="text-align: center; padding: 50px 0 30px 0;">
-            <h1 style="font-size: 3em; margin-bottom: 10px;">🏦 TAX Optimization</h1>
-            <p style="font-size: 1.2em; color: #64748b;">RRSP & TFSA Planning Platform</p>
+    # Professional animated header
+    st.markdown(f"""
+        <style>
+        @keyframes float {{
+            0%, 100% {{ transform: translateY(0px); }}
+            50% {{ transform: translateY(-10px); }}
+        }}
+        .login-container {{
+            max-width: 650px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }}
+        .login-card {{
+            background: white;
+            padding: 48px 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+        }}
+        </style>
+        
+        <div style="text-align: center; padding: 60px 0 40px 0;">
+            <div style="font-size: 5em; margin-bottom: 20px; animation: float 3s ease-in-out infinite;">🏦</div>
+            <h1 style="font-size: 2.8em; font-weight: 800; color: #1e293b; margin-bottom: 12px; letter-spacing: -0.5px;">
+                {APP_NAME}
+            </h1>
+            <p style="font-size: 1.15em; color: #64748b; font-weight: 500; margin-bottom: 10px;">
+                {APP_SUBTITLE}
+            </p>
         </div>
     """, unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # Centered professional login card
+    col_left, col_center, col_right = st.columns([1, 2.5, 1])
     
-    with col2:
-        tab1, tab2 = st.tabs(["Login", "Register"])
+    with col_center:
+        st.markdown('<div class="login-card">', unsafe_allow_html=True)
+        
+        tab1, tab2 = st.tabs(["🔐 Sign In", "📝 Create Account"])
         
         # LOGIN TAB
         with tab1:
-            st.markdown("### Login to Your Account")
+            st.markdown("### Sign In to Your Account")
             
             with st.form("login_form"):
-                username_or_email = st.text_input("Username or Email")
-                password = st.text_input("Password", type="password")
+                username_or_email = st.text_input("Username or Email", placeholder="Enter your username or email")
+                password = st.text_input("Password", type="password", placeholder="Enter your password")
                 
-                login_button = st.form_submit_button("🔐 Login", use_container_width=True, type="primary")
+                col_btn1, col_btn2 = st.columns([1, 1])
+                with col_btn1:
+                    login_button = st.form_submit_button("🔐 Sign In", use_container_width=True, type="primary")
                 
                 if login_button:
                     if not username_or_email or not password:
-                        st.error("Please enter both username/email and password")
+                        st.error("⚠️ Please enter both username/email and password")
                     else:
                         success, message, user_data = login_user(username_or_email, password)
                         
@@ -845,20 +881,20 @@ def show_auth_page():
                             st.session_state.email = user_data['email']
                             st.session_state.role = user_data['role']
                             st.session_state.session_token = user_data['session_token']
-                            st.success(message)
+                            st.success(f"✅ {message}")
                             st.rerun()
                         else:
-                            st.error(message)
+                            st.error(f"❌ {message}")
         
         # REGISTER TAB
         with tab2:
-            st.markdown("### Create New Account")
+            st.markdown("### Create Your Account")
             
             with st.form("register_form"):
-                new_username = st.text_input("Username (3-20 characters)")
-                new_email = st.text_input("Email Address")
-                new_password = st.text_input("Password (min 8 chars)", type="password")
-                confirm_password = st.text_input("Confirm Password", type="password")
+                new_username = st.text_input("Username", placeholder="3-20 characters, letters and numbers")
+                new_email = st.text_input("Email Address", placeholder="your@email.com")
+                new_password = st.text_input("Password", type="password", placeholder="Minimum 8 characters")
+                confirm_password = st.text_input("Confirm Password", type="password", placeholder="Re-enter your password")
                 
                 register_button = st.form_submit_button("✨ Create Account", 
                                                         use_container_width=True, type="primary")
@@ -868,15 +904,46 @@ def show_auth_page():
                                                      new_password, confirm_password)
                     
                     if success:
-                        st.success(message)
+                        st.success(f"✅ {message}")
                         st.balloons()
                     else:
-                        st.error(message)
+                        st.error(f"❌ {message}")
+        
+        # First time setup help - Professional expandable section
+        with st.expander("ℹ️ First time setup?", expanded=False):
+            st.markdown("""
+                <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); 
+                     padding: 24px; border-radius: 12px; border-left: 4px solid #3b82f6;">
+                    <h4 style="margin-top: 0; color: #1e3a8a;">Default Admin Account</h4>
+                    <p style="margin: 12px 0; color: #1e40af;">
+                        Use these credentials for first-time administrative access:
+                    </p>
+                    <div style="background: #f8fafc; padding: 16px; border-radius: 10px; 
+                         font-family: 'SF Mono', 'Monaco', 'Courier New', monospace; 
+                         margin: 12px 0; border: 1px solid #e2e8f0;">
+                        <div style="margin: 8px 0;"><strong>Username:</strong> <code style="background: #e0f2fe; padding: 4px 8px; border-radius: 4px;">admin</code></div>
+                        <div style="margin: 8px 0;"><strong>Password:</strong> <code style="background: #e0f2fe; padding: 4px 8px; border-radius: 4px;">admin123</code></div>
+                    </div>
+                    <div style="background: #fef3c7; padding: 12px; border-radius: 8px; border-left: 3px solid #f59e0b; margin-top: 16px;">
+                        <p style="margin: 0; color: #92400e; font-size: 0.95em;">
+                            <strong>⚠️ Security Notice:</strong> Change the admin password immediately after first login for security.
+                        </p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
     
-    st.markdown("---")
+    # Professional footer
     st.markdown(f"""
-        <div style="text-align: center; color: #64748b; padding: 20px;">
-            <p>Version {APP_VERSION} • Multi-User Edition • Powered by PostgreSQL</p>
+        <div style="text-align: center; color: #94a3b8; font-size: 0.9em; margin-top: 60px; padding: 30px 20px;">
+            <p style="font-weight: 600; color: #64748b; margin-bottom: 8px;">{APP_NAME} • {APP_VERSION}</p>
+            <p style="font-size: 0.85em; margin: 4px 0;">
+                Built: {APP_DATE} • Professional Edition • Multi-User Platform
+            </p>
+            <p style="font-size: 0.8em; margin: 8px 0 0 0; color: #cbd5e1;">
+                Tax rates: 2025/2026 Ontario (Federal + Provincial) • Auto-Migration Enabled • PostgreSQL Powered
+            </p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -885,7 +952,7 @@ def show_auth_page():
 # ============================================================================
 
 def show_admin_dashboard():
-    """Display admin dashboard for user management"""
+    """Display professional institutional-grade admin dashboard"""
     
     with st.sidebar:
         if st.button("⬅️ Back to App", use_container_width=True, key="admin_back_btn"):
@@ -904,11 +971,24 @@ def show_admin_dashboard():
             st.session_state.session_token = None
             st.rerun()
     
-    st.title("👥 Admin Dashboard")
+    # PROFESSIONAL HEADER BANNER (Purple Gradient - Matching Reference Image 2)
+    st.markdown("""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+             color: white; padding: 40px; border-radius: 16px; margin-bottom: 32px; 
+             box-shadow: 0 10px 15px -3px rgba(102, 126, 234, 0.4);">
+            <h1 style="margin: 0; font-size: 2.2em; font-weight: 700; color: white;">
+                👑 Administrator Dashboard
+            </h1>
+            <p style="margin: 12px 0 0 0; font-size: 1.15em; opacity: 0.95; color: white; font-weight: 500;">
+                System Overview & Management
+            </p>
+            <p style="margin: 8px 0 0 0; font-size: 0.95em; opacity: 0.9; color: white;">
+                Complete administrative control and monitoring dashboard
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    # User statistics
-    st.markdown("### 📊 System Statistics")
-    
+    # Get comprehensive statistics
     try:
         stats_query = """
             SELECT 
@@ -919,115 +999,289 @@ def show_admin_dashboard():
         """
         stats = execute_query(stats_query)
         
+        # Count planning years
+        years_query = "SELECT COUNT(*) as total_years FROM tax_planning_years"
+        years_data = execute_query(years_query)
+        
+        # Count years needing optimization (Penthouse exposure)
+        needs_action_query = """
+            SELECT COUNT(*) as needs_action 
+            FROM tax_planning_years 
+            WHERE (COALESCE((data->>'t4_gross_income')::numeric, 0) + 
+                   COALESCE((data->>'other_income')::numeric, 0) - 
+                   COALESCE((data->>'rrsp_lump_sum_optimization')::numeric, 0) - 
+                   COALESCE((data->>'rrsp_lump_sum_additional')::numeric, 0) -
+                   (COALESCE((data->>'base_salary')::numeric, 0) * 
+                    (COALESCE((data->>'biweekly_pct')::numeric, 0) + 
+                     COALESCE((data->>'employer_match')::numeric, 0)) / 100)) > 181440
+        """
+        needs_action_data = execute_query(needs_action_query)
+        
+        # Calculate total portfolio value
+        portfolio_query = """
+            SELECT SUM(COALESCE((data->>'rrsp_balance_start')::numeric, 0) + 
+                      COALESCE((data->>'tfsa_balance_start')::numeric, 0)) as total_aum
+            FROM tax_planning_years
+        """
+        portfolio_data = execute_query(portfolio_query)
+        
         if stats:
-            col1, col2, col3 = st.columns(3)
+            # LARGE COLORED METRIC CARDS (Matching Reference Image 2)
+            col1, col2, col3, col4 = st.columns(4)
+            
             with col1:
-                st.metric("Total Users", stats[0]['total_users'])
+                st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
+                         color: white; padding: 36px 24px; border-radius: 16px; text-align: center;
+                         box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.5);">
+                        <div style="font-size: 3.8em; font-weight: 800; margin: 10px 0; line-height: 1;">{stats[0]['total_users']}</div>
+                        <div style="font-size: 0.95em; font-weight: 600; opacity: 0.95; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 8px;">Total Users</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            
             with col2:
-                st.metric("Active Users", stats[0]['active_users'])
+                total_years = years_data[0]['total_years'] if years_data else 0
+                st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
+                         color: white; padding: 36px 24px; border-radius: 16px; text-align: center;
+                         box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.5);">
+                        <div style="font-size: 3.8em; font-weight: 800; margin: 10px 0; line-height: 1;">{total_years}</div>
+                        <div style="font-size: 0.95em; font-weight: 600; opacity: 0.95; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 8px;">Total Planning Years</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            
             with col3:
-                st.metric("Admins", stats[0]['admin_users'])
+                needs_action = needs_action_data[0]['needs_action'] if needs_action_data else 0
+                st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); 
+                         color: white; padding: 36px 24px; border-radius: 16px; text-align: center;
+                         box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.5);">
+                        <div style="font-size: 3.8em; font-weight: 800; margin: 10px 0; line-height: 1;">{needs_action}</div>
+                        <div style="font-size: 0.95em; font-weight: 600; opacity: 0.95; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 8px;">Need Optimization</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            with col4:
+                total_aum = portfolio_data[0]['total_aum'] if portfolio_data and portfolio_data[0]['total_aum'] else 0
+                st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); 
+                         color: white; padding: 36px 24px; border-radius: 16px; text-align: center;
+                         box-shadow: 0 4px 6px -1px rgba(139, 92, 246, 0.5);">
+                        <div style="font-size: 2.8em; font-weight: 800; margin: 10px 0; line-height: 1;">${total_aum:,.0f}</div>
+                        <div style="font-size: 0.95em; font-weight: 600; opacity: 0.95; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 8px;">Total Portfolio Value</div>
+                    </div>
+                """, unsafe_allow_html=True)
+    
     except Exception as e:
         st.error(f"Error loading statistics: {e}")
     
     st.divider()
     
-    # User management
-    st.markdown("### 👥 User Management")
+    # TAB NAVIGATION (Matching Reference Image 2)
+    tab1, tab2, tab3 = st.tabs(["📊 All Users Overview", "👥 User Management", "📈 System Analytics"])
     
-    try:
-        users_query = """
-            SELECT user_id, username, email, role, is_active, created_at, last_login
-            FROM users
-            ORDER BY created_at DESC
-        """
-        users = execute_query(users_query)
+    with tab1:
+        st.markdown("### 📊 All Users Overview")
+        st.caption("Complete view of all user profiles across the system")
         
-        if users:
-            # Display as table
-            df = pd.DataFrame(users)
-            df['created_at'] = pd.to_datetime(df['created_at']).dt.strftime('%Y-%m-%d')
-            df['last_login'] = pd.to_datetime(df['last_login']).dt.strftime('%Y-%m-%d %H:%M')
+        try:
+            users_query = """
+                SELECT u.user_id, u.username, u.email, u.role, u.is_active, u.created_at, u.last_login,
+                       COUNT(t.record_id) as planning_years
+                FROM users u
+                LEFT JOIN tax_planning_years t ON u.user_id = t.user_id
+                GROUP BY u.user_id
+                ORDER BY u.created_at DESC
+            """
+            users = execute_query(users_query)
             
-            st.dataframe(df, use_container_width=True, hide_index=True)
-            
-            st.divider()
-            
-            # User actions
-            st.markdown("### ⚙️ User Actions")
-            
-            col_action1, col_action2, col_action3 = st.columns([2, 2, 1])
-            
-            with col_action1:
-                selected_username = st.selectbox(
-                    "Select User",
-                    options=[u['username'] for u in users],
-                    key="admin_user_select"
-                )
-            
-            with col_action2:
-                action = st.selectbox(
-                    "Action",
-                    ["Promote to Admin", "Demote to User", "Deactivate Account", "Activate Account"],
-                    key="admin_action_select"
-                )
-            
-            with col_action3:
-                execute_btn = st.button("Execute", type="primary", use_container_width=True)
-            
-            if execute_btn and selected_username:
-                selected_user = next(u for u in users if u['username'] == selected_username)
+            if users:
+                # Filter controls (Matching Reference Image 2)
+                col_filter1, col_filter2, col_filter3 = st.columns(3)
+                with col_filter1:
+                    st.selectbox("Filter by User", ["All"] + [u['username'] for u in users], key="filter_user_dash")
+                with col_filter2:
+                    st.selectbox("Filter by Status", ["All", "Active", "Inactive"], key="filter_status_dash")
+                with col_filter3:
+                    st.selectbox("Sort by", ["User", "Created Date", "Planning Years"], key="sort_by_dash")
                 
-                try:
-                    if action == "Promote to Admin":
-                        execute_query(
-                            "UPDATE users SET role = 'admin' WHERE user_id = %s",
-                            (selected_user['user_id'],),
-                            fetch=False
-                        )
-                        st.success(f"✅ {selected_username} promoted to admin")
-                        st.rerun()
-                    
-                    elif action == "Demote to User":
-                        if selected_user['user_id'] == st.session_state.user_id:
-                            st.error("❌ You cannot demote yourself!")
-                        else:
-                            execute_query(
-                                "UPDATE users SET role = 'user' WHERE user_id = %s",
-                                (selected_user['user_id'],),
-                                fetch=False
-                            )
-                            st.success(f"✅ {selected_username} demoted to user")
-                            st.rerun()
-                    
-                    elif action == "Deactivate Account":
-                        if selected_user['user_id'] == st.session_state.user_id:
-                            st.error("❌ You cannot deactivate yourself!")
-                        else:
-                            execute_query(
-                                "UPDATE users SET is_active = FALSE WHERE user_id = %s",
-                                (selected_user['user_id'],),
-                                fetch=False
-                            )
-                            st.success(f"✅ {selected_username} account deactivated")
-                            st.rerun()
-                    
-                    elif action == "Activate Account":
-                        execute_query(
-                            "UPDATE users SET is_active = TRUE WHERE user_id = %s",
-                            (selected_user['user_id'],),
-                            fetch=False
-                        )
-                        st.success(f"✅ {selected_username} account activated")
-                        st.rerun()
+                st.caption(f"Showing {len(users)} of {len(users)} profile(s)")
                 
-                except Exception as e:
-                    st.error(f"Error executing action: {e}")
-        else:
-            st.info("No users found")
+                st.markdown("")
+                
+                # Display professional user profile cards
+                for user in users:
+                    # Status badge
+                    if user['is_active']:
+                        status_badge = '<span style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); color: #065f46; padding: 6px 16px; border-radius: 20px; font-size: 0.85em; font-weight: 600; border: 1px solid #10b981;">✓ ACTIVE</span>'
+                    else:
+                        status_badge = '<span style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); color: #7f1d1d; padding: 6px 16px; border-radius: 20px; font-size: 0.85em; font-weight: 600; border: 1px solid #ef4444;">⊘ INACTIVE</span>'
+                    
+                    # Action button color
+                    if user['planning_years'] == 0:
+                        action_color = "#94a3b8"
+                        action_text = "No Plans"
+                    elif user['planning_years'] > 0:
+                        action_color = "#10b981"
+                        action_text = f"{user['planning_years']} Plans"
+                    
+                    # Professional profile card
+                    col_card1, col_card2 = st.columns([4, 1])
+                    
+                    with col_card1:
+                        st.markdown(f"""
+                            <div style="background: white; border-radius: 12px; padding: 24px; 
+                                 border: 1px solid #e2e8f0; margin-bottom: 16px; transition: all 0.3s ease;
+                                 box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                    <h3 style="margin: 0; color: #1e293b; font-size: 1.3em;">
+                                        📊 {user['username']}
+                                    </h3>
+                                    {status_badge}
+                                </div>
+                                <div style="margin: 12px 0; color: #64748b; line-height: 1.6;">
+                                    <div style="margin: 6px 0;">
+                                        <strong style="color: #475569;">Email:</strong> {user['email']}
+                                    </div>
+                                    <div style="margin: 6px 0;">
+                                        <strong style="color: #475569;">Role:</strong> 
+                                        <span style="text-transform: uppercase; font-weight: 600; color: {'#8b5cf6' if user['role'] == 'admin' else '#3b82f6'};">{user['role']}</span>
+                                    </div>
+                                    <div style="margin: 6px 0;">
+                                        <strong style="color: #475569;">Planning Years:</strong> 
+                                        <span style="color: {action_color}; font-weight: 600;">{action_text}</span>
+                                    </div>
+                                </div>
+                                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #f1f5f9; font-size: 0.9em; color: #94a3b8;">
+                                    <strong>Created:</strong> {user['created_at'].strftime('%Y-%m-%d') if user['created_at'] else 'N/A'} | 
+                                    <strong>Last Login:</strong> {user['last_login'].strftime('%Y-%m-%d %H:%M') if user['last_login'] else 'Never'}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col_card2:
+                        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+                        st.button("👁️ View", key=f"view_user_{user['user_id']}", use_container_width=True)
+            else:
+                st.info("📭 No users found in the system")
+        
+        except Exception as e:
+            st.error(f"Error loading users: {e}")
     
-    except Exception as e:
-        st.error(f"Error loading users: {e}")
+    with tab2:
+        st.markdown("### 👥 User Management")
+        st.caption("Administrative actions and user account management")
+        
+        try:
+            users = execute_query("SELECT * FROM users ORDER BY created_at DESC")
+            
+            if users:
+                # Display users table
+                df = pd.DataFrame(users)
+                df['created_at'] = pd.to_datetime(df['created_at']).dt.strftime('%Y-%m-%d')
+                df['last_login'] = pd.to_datetime(df['last_login']).dt.strftime('%Y-%m-%d %H:%M')
+                
+                st.dataframe(df[['username', 'email', 'role', 'is_active', 'created_at', 'last_login']], 
+                            use_container_width=True, hide_index=True)
+                
+                st.divider()
+                
+                # User actions
+                st.markdown("### ⚙️ Administrative Actions")
+                
+                col_action1, col_action2, col_action3 = st.columns([2, 2, 1])
+                
+                with col_action1:
+                    selected_username = st.selectbox(
+                        "Select User",
+                        options=[u['username'] for u in users],
+                        key="admin_user_select"
+                    )
+                
+                with col_action2:
+                    action = st.selectbox(
+                        "Action",
+                        ["Promote to Admin", "Demote to User", "Deactivate Account", "Activate Account"],
+                        key="admin_action_select"
+                    )
+                
+                with col_action3:
+                    execute_btn = st.button("Execute", type="primary", use_container_width=True, key="admin_execute_btn")
+                
+                if execute_btn and selected_username:
+                    selected_user = next(u for u in users if u['username'] == selected_username)
+                    
+                    try:
+                        if action == "Promote to Admin":
+                            execute_query(
+                                "UPDATE users SET role = 'admin' WHERE user_id = %s",
+                                (selected_user['user_id'],),
+                                fetch=False
+                            )
+                            st.success(f"✅ {selected_username} promoted to admin")
+                            st.rerun()
+                        
+                        elif action == "Demote to User":
+                            if selected_user['user_id'] == st.session_state.user_id:
+                                st.error("❌ You cannot demote yourself!")
+                            else:
+                                execute_query(
+                                    "UPDATE users SET role = 'user' WHERE user_id = %s",
+                                    (selected_user['user_id'],),
+                                    fetch=False
+                                )
+                                st.success(f"✅ {selected_username} demoted to user")
+                                st.rerun()
+                        
+                        elif action == "Deactivate Account":
+                            if selected_user['user_id'] == st.session_state.user_id:
+                                st.error("❌ You cannot deactivate yourself!")
+                            else:
+                                execute_query(
+                                    "UPDATE users SET is_active = FALSE WHERE user_id = %s",
+                                    (selected_user['user_id'],),
+                                    fetch=False
+                                )
+                                st.success(f"✅ {selected_username} account deactivated")
+                                st.rerun()
+                        
+                        elif action == "Activate Account":
+                            execute_query(
+                                "UPDATE users SET is_active = TRUE WHERE user_id = %s",
+                                (selected_user['user_id'],),
+                                fetch=False
+                            )
+                            st.success(f"✅ {selected_username} account activated")
+                            st.rerun()
+                    
+                    except Exception as e:
+                        st.error(f"Error executing action: {e}")
+            else:
+                st.info("📭 No users found")
+        
+        except Exception as e:
+            st.error(f"Error loading users: {e}")
+    
+    with tab3:
+        st.markdown("### 📈 System Analytics")
+        st.markdown("")
+        
+        st.info("📊 **Advanced analytics dashboard coming in future update**")
+        
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); 
+                 padding: 24px; border-radius: 12px; border-left: 4px solid #3b82f6; margin-top: 20px;">
+                <h4 style="margin-top: 0; color: #1e3a8a;">Planned Analytics Features:</h4>
+                <ul style="color: #1e40af; line-height: 1.8;">
+                    <li>📊 User activity trends and engagement metrics</li>
+                    <li>💰 Aggregate portfolio value growth over time</li>
+                    <li>🎯 Tax optimization success rate tracking</li>
+                    <li>📈 Average RRSP/TFSA contribution patterns</li>
+                    <li>⚠️ Users approaching contribution limits</li>
+                    <li>🏆 Top optimizers leaderboard</li>
+                </ul>
+            </div>
+        """, unsafe_allow_html=True)
 
 # ============================================================================
 # USER PROFILE PAGE
