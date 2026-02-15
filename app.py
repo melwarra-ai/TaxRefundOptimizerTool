@@ -1,21 +1,25 @@
 """
-Canadian Tax Optimizer - PROFESSIONAL EDITION
-Version 6.2.0 - Institutional-Grade UI
+Canadian Tax Optimizer - PROFESSIONAL EDITION with Advanced Analytics
+Version 6.3.0 - Complete Analytics Dashboard
 
 Professional application featuring:
-- ✨ Institutional-grade user interface (professional portfolio management design)
+- ✨ Institutional-grade user interface
 - 👑 Advanced admin dashboard with 4 colored metric cards
+- 📊 COMPLETE Analytics Dashboard (6 analytics modules)
 - 🎨 Professional login page with animated branding
-- 📊 Tab-based navigation and enhanced analytics
-- 🔐 Complete multi-user authentication system
-- 🔄 Auto-database migration (creates tables automatically!)
+- 📈 User activity trends and engagement metrics
+- 💰 Portfolio value growth over time
+- 🎯 Tax optimization success rate tracking
+- 📊 RRSP/TFSA contribution pattern analysis
+- ⚠️ Contribution limit warnings
+- 🏆 Top optimizers leaderboard
+- 🔐 Multi-user authentication system
 - 💼 All tax optimization features (RRSP, TFSA, multi-year planning)
 - 📈 Portfolio tracking with growth projections
 - 💡 Strategic insights and recommendations
 
 Based on institutional portfolio management design principles
 Ready for enterprise deployment on Streamlit Cloud
-NO MANUAL SQL REQUIRED - Tables create automatically on first run!
 """
 
 import streamlit as st
@@ -35,7 +39,7 @@ import json
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.2.0 - PROFESSIONAL EDITION"
+APP_VERSION = "6.3.0 - PROFESSIONAL with COMPLETE ANALYTICS"
 APP_DATE = "February 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
@@ -163,6 +167,10 @@ class DatabaseMigration:
         if current_version < 3:
             DatabaseMigration.migration_003_add_phase2_tables()
             current_version = 3
+        
+        if current_version < 4:
+            DatabaseMigration.migration_004_create_default_admin()
+            current_version = 4
         
         return current_version
     
@@ -302,6 +310,38 @@ class DatabaseMigration:
         """, fetch=False)
         
         DatabaseMigration.record_migration(3, 'Add Phase 2 tables')
+    
+    @staticmethod
+    def migration_004_create_default_admin():
+        """Migration 4: Create default admin account if no users exist"""
+        # Check if any users exist
+        try:
+            users_count = execute_query("SELECT COUNT(*) as count FROM users", show_error=False)
+            
+            if users_count and users_count[0]['count'] == 0:
+                # No users exist, create default admin
+                admin_username = "admin"
+                admin_email = "admin@taxoptimizer.local"
+                admin_password = "admin123"
+                
+                # Hash password
+                salt = secrets.token_hex(16)
+                password_hash = hashlib.sha256((admin_password + salt).encode()).hexdigest()
+                
+                # Insert default admin
+                execute_query("""
+                    INSERT INTO users (username, email, password_hash, salt, role, is_active, created_at)
+                    VALUES (%s, %s, %s, %s, 'admin', TRUE, %s)
+                """, (admin_username, admin_email, password_hash, salt, datetime.now()), fetch=False)
+                
+                # Log success (this won't show but will be in logs)
+                print(f"✅ Default admin account created: {admin_username} / {admin_password}")
+        
+        except Exception as e:
+            # If users table doesn't exist yet, skip (will run after table creation)
+            print(f"Skipping default admin creation: {e}")
+        
+        DatabaseMigration.record_migration(4, 'Create default admin account')
 
 # Initialize database with auto-migrations
 @st.cache_resource
@@ -1263,25 +1303,511 @@ def show_admin_dashboard():
             st.error(f"Error loading users: {e}")
     
     with tab3:
-        st.markdown("### 📈 System Analytics")
+        st.markdown("### 📈 System Analytics Dashboard")
+        st.caption("Comprehensive analytics and insights across all users and planning years")
+        
         st.markdown("")
         
-        st.info("📊 **Advanced analytics dashboard coming in future update**")
+        # =================================================================
+        # ANALYTICS FEATURE 1: User Activity Trends & Engagement Metrics
+        # =================================================================
         
-        st.markdown("""
-            <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); 
-                 padding: 24px; border-radius: 12px; border-left: 4px solid #3b82f6; margin-top: 20px;">
-                <h4 style="margin-top: 0; color: #1e3a8a;">Planned Analytics Features:</h4>
-                <ul style="color: #1e40af; line-height: 1.8;">
-                    <li>📊 User activity trends and engagement metrics</li>
-                    <li>💰 Aggregate portfolio value growth over time</li>
-                    <li>🎯 Tax optimization success rate tracking</li>
-                    <li>📈 Average RRSP/TFSA contribution patterns</li>
-                    <li>⚠️ Users approaching contribution limits</li>
-                    <li>🏆 Top optimizers leaderboard</li>
-                </ul>
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown("#### 📊 User Activity Trends & Engagement Metrics")
+        
+        try:
+            # Get user activity data
+            activity_query = """
+                SELECT 
+                    DATE(login_time) as date,
+                    COUNT(DISTINCT user_id) as active_users,
+                    COUNT(*) as total_logins,
+                    SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_logins
+                FROM login_history
+                WHERE login_time >= CURRENT_DATE - INTERVAL '30 days'
+                GROUP BY DATE(login_time)
+                ORDER BY date
+            """
+            activity_data = execute_query(activity_query)
+            
+            if activity_data and len(activity_data) > 0:
+                col_act1, col_act2, col_act3 = st.columns(3)
+                
+                # Calculate metrics
+                total_active_users = len(set([row['active_users'] for row in activity_data]))
+                total_logins_30d = sum([row['total_logins'] for row in activity_data])
+                avg_daily_logins = total_logins_30d / 30 if activity_data else 0
+                
+                with col_act1:
+                    st.metric("Active Users (30d)", total_active_users, 
+                             help="Unique users who logged in within last 30 days")
+                
+                with col_act2:
+                    st.metric("Total Logins (30d)", total_logins_30d,
+                             help="Total login attempts in last 30 days")
+                
+                with col_act3:
+                    st.metric("Avg Daily Logins", f"{avg_daily_logins:.1f}",
+                             help="Average logins per day over last 30 days")
+                
+                # Activity trend chart
+                df_activity = pd.DataFrame(activity_data)
+                df_activity['date'] = pd.to_datetime(df_activity['date'])
+                
+                activity_chart = alt.Chart(df_activity).mark_line(point=True, strokeWidth=3).encode(
+                    x=alt.X('date:T', title='Date', axis=alt.Axis(format='%b %d')),
+                    y=alt.Y('active_users:Q', title='Active Users'),
+                    tooltip=[
+                        alt.Tooltip('date:T', title='Date', format='%Y-%m-%d'),
+                        alt.Tooltip('active_users:Q', title='Active Users'),
+                        alt.Tooltip('total_logins:Q', title='Total Logins')
+                    ]
+                ).properties(
+                    height=300,
+                    title='Daily Active Users (Last 30 Days)'
+                )
+                
+                st.altair_chart(activity_chart, use_container_width=True)
+            else:
+                st.info("📊 No activity data available yet. Activity will be tracked as users login.")
+        
+        except Exception as e:
+            st.warning(f"Unable to load activity trends: {str(e)}")
+        
+        st.divider()
+        
+        # =================================================================
+        # ANALYTICS FEATURE 2: Aggregate Portfolio Value Growth Over Time
+        # =================================================================
+        
+        st.markdown("#### 💰 Aggregate Portfolio Value Growth Over Time")
+        
+        try:
+            # Get portfolio growth data
+            portfolio_query = """
+                SELECT 
+                    year,
+                    SUM(COALESCE((data->>'rrsp_balance_start')::numeric, 0)) as total_rrsp,
+                    SUM(COALESCE((data->>'tfsa_balance_start')::numeric, 0)) as total_tfsa,
+                    SUM(
+                        COALESCE((data->>'rrsp_balance_start')::numeric, 0) + 
+                        COALESCE((data->>'tfsa_balance_start')::numeric, 0)
+                    ) as total_aum
+                FROM tax_planning_years
+                GROUP BY year
+                ORDER BY year
+            """
+            portfolio_data = execute_query(portfolio_query)
+            
+            if portfolio_data and len(portfolio_data) > 0:
+                df_portfolio = pd.DataFrame(portfolio_data)
+                
+                # Summary metrics
+                latest_year = df_portfolio.iloc[-1]
+                total_aum = latest_year['total_aum']
+                total_rrsp = latest_year['total_rrsp']
+                total_tfsa = latest_year['total_tfsa']
+                
+                col_port1, col_port2, col_port3 = st.columns(3)
+                
+                with col_port1:
+                    st.metric("Total AUM", f"${total_aum:,.0f}",
+                             help="Total assets under management (RRSP + TFSA)")
+                
+                with col_port2:
+                    st.metric("Total RRSP", f"${total_rrsp:,.0f}",
+                             help="Combined RRSP balance across all users")
+                
+                with col_port3:
+                    st.metric("Total TFSA", f"${total_tfsa:,.0f}",
+                             help="Combined TFSA balance across all users")
+                
+                # Portfolio growth chart (stacked area)
+                df_melted = df_portfolio.melt(
+                    id_vars=['year'],
+                    value_vars=['total_rrsp', 'total_tfsa'],
+                    var_name='Account',
+                    value_name='Balance'
+                )
+                
+                df_melted['Account'] = df_melted['Account'].map({
+                    'total_rrsp': 'RRSP',
+                    'total_tfsa': 'TFSA'
+                })
+                
+                growth_chart = alt.Chart(df_melted).mark_area(opacity=0.7).encode(
+                    x=alt.X('year:O', title='Year'),
+                    y=alt.Y('Balance:Q', title='Portfolio Value ($)', stack='zero'),
+                    color=alt.Color('Account:N',
+                        scale=alt.Scale(
+                            domain=['RRSP', 'TFSA'],
+                            range=['#3b82f6', '#10b981']
+                        ),
+                        legend=alt.Legend(title='Account Type')
+                    ),
+                    tooltip=[
+                        alt.Tooltip('year:O', title='Year'),
+                        alt.Tooltip('Account:N', title='Account'),
+                        alt.Tooltip('Balance:Q', title='Balance', format='$,.0f')
+                    ]
+                ).properties(
+                    height=300,
+                    title='Portfolio Growth by Year'
+                )
+                
+                st.altair_chart(growth_chart, use_container_width=True)
+            else:
+                st.info("💰 No portfolio data available yet. Data will appear as users add planning years.")
+        
+        except Exception as e:
+            st.warning(f"Unable to load portfolio growth: {str(e)}")
+        
+        st.divider()
+        
+        # =================================================================
+        # ANALYTICS FEATURE 3: Tax Optimization Success Rate Tracking
+        # =================================================================
+        
+        st.markdown("#### 🎯 Tax Optimization Success Rate Tracking")
+        
+        try:
+            # Get optimization stats
+            optimization_query = """
+                SELECT 
+                    COUNT(*) as total_years,
+                    SUM(CASE 
+                        WHEN (
+                            COALESCE((data->>'t4_gross_income')::numeric, 0) + 
+                            COALESCE((data->>'other_income')::numeric, 0) -
+                            COALESCE((data->>'rrsp_lump_sum_optimization')::numeric, 0) - 
+                            COALESCE((data->>'rrsp_lump_sum_additional')::numeric, 0) -
+                            (COALESCE((data->>'base_salary')::numeric, 0) * 
+                             (COALESCE((data->>'biweekly_pct')::numeric, 0) + 
+                              COALESCE((data->>'employer_match')::numeric, 0)) / 100)
+                        ) < 181440 THEN 1 ELSE 0 
+                    END) as optimized_years,
+                    SUM(CASE 
+                        WHEN (
+                            COALESCE((data->>'t4_gross_income')::numeric, 0) + 
+                            COALESCE((data->>'other_income')::numeric, 0)
+                        ) > 0 THEN 1 ELSE 0
+                    END) as years_with_data
+                FROM tax_planning_years
+            """
+            opt_data = execute_query(optimization_query)
+            
+            if opt_data and opt_data[0]['total_years'] > 0:
+                total = opt_data[0]['total_years']
+                optimized = opt_data[0]['optimized_years']
+                with_data = opt_data[0]['years_with_data']
+                not_optimized = with_data - optimized
+                
+                success_rate = (optimized / with_data * 100) if with_data > 0 else 0
+                
+                col_opt1, col_opt2 = st.columns([1, 2])
+                
+                with col_opt1:
+                    # Success rate metrics
+                    st.metric("Optimization Success Rate", f"{success_rate:.1f}%",
+                             help="% of planning years below $181,440 Penthouse threshold")
+                    
+                    st.metric("Optimized Years", f"{optimized}/{with_data}",
+                             help="Years with taxable income below Penthouse threshold")
+                    
+                    st.metric("Need Optimization", not_optimized,
+                             help="Years with Penthouse exposure",
+                             delta=f"-{not_optimized} to optimize" if not_optimized > 0 else "All optimized!",
+                             delta_color="inverse" if not_optimized > 0 else "normal")
+                
+                with col_opt2:
+                    # Pie chart showing optimization breakdown
+                    opt_breakdown = pd.DataFrame({
+                        'Status': ['Optimized (Below $181,440)', 'Need Optimization (Above $181,440)'],
+                        'Count': [optimized, not_optimized],
+                        'Color': ['#10b981', '#ef4444']
+                    })
+                    
+                    pie_chart = alt.Chart(opt_breakdown).mark_arc(innerRadius=50).encode(
+                        theta=alt.Theta('Count:Q'),
+                        color=alt.Color('Status:N',
+                            scale=alt.Scale(
+                                domain=['Optimized (Below $181,440)', 'Need Optimization (Above $181,440)'],
+                                range=['#10b981', '#ef4444']
+                            ),
+                            legend=alt.Legend(title='Optimization Status')
+                        ),
+                        tooltip=[
+                            alt.Tooltip('Status:N', title='Status'),
+                            alt.Tooltip('Count:Q', title='Years'),
+                        ]
+                    ).properties(
+                        height=300,
+                        title='Tax Optimization Status Distribution'
+                    )
+                    
+                    st.altair_chart(pie_chart, use_container_width=True)
+            else:
+                st.info("🎯 No optimization data available yet.")
+        
+        except Exception as e:
+            st.warning(f"Unable to load optimization stats: {str(e)}")
+        
+        st.divider()
+        
+        # =================================================================
+        # ANALYTICS FEATURE 4: Average RRSP/TFSA Contribution Patterns
+        # =================================================================
+        
+        st.markdown("#### 📈 Average RRSP/TFSA Contribution Patterns")
+        
+        try:
+            # Get contribution patterns
+            contrib_query = """
+                SELECT 
+                    year,
+                    AVG(
+                        (COALESCE((data->>'base_salary')::numeric, 0) * 
+                         (COALESCE((data->>'biweekly_pct')::numeric, 0) + 
+                          COALESCE((data->>'employer_match')::numeric, 0)) / 100) +
+                        COALESCE((data->>'rrsp_lump_sum_optimization')::numeric, 0) +
+                        COALESCE((data->>'rrsp_lump_sum_additional')::numeric, 0)
+                    ) as avg_rrsp,
+                    AVG(COALESCE((data->>'tfsa_lump_sum')::numeric, 0)) as avg_tfsa,
+                    COUNT(*) as user_count
+                FROM tax_planning_years
+                WHERE COALESCE((data->>'t4_gross_income')::numeric, 0) > 0
+                GROUP BY year
+                ORDER BY year
+            """
+            contrib_data = execute_query(contrib_query)
+            
+            if contrib_data and len(contrib_data) > 0:
+                df_contrib = pd.DataFrame(contrib_data)
+                
+                # Summary stats
+                overall_avg_rrsp = df_contrib['avg_rrsp'].mean()
+                overall_avg_tfsa = df_contrib['avg_tfsa'].mean()
+                
+                col_contrib1, col_contrib2, col_contrib3 = st.columns(3)
+                
+                with col_contrib1:
+                    st.metric("Avg Annual RRSP", f"${overall_avg_rrsp:,.0f}",
+                             help="Average RRSP contribution across all users")
+                
+                with col_contrib2:
+                    st.metric("Avg Annual TFSA", f"${overall_avg_tfsa:,.0f}",
+                             help="Average TFSA contribution across all users")
+                
+                with col_contrib3:
+                    total_avg = overall_avg_rrsp + overall_avg_tfsa
+                    st.metric("Avg Total Contribution", f"${total_avg:,.0f}",
+                             help="Combined average RRSP + TFSA per user")
+                
+                # Contribution pattern chart (grouped bars)
+                df_melted = df_contrib.melt(
+                    id_vars=['year'],
+                    value_vars=['avg_rrsp', 'avg_tfsa'],
+                    var_name='Account',
+                    value_name='Amount'
+                )
+                
+                df_melted['Account'] = df_melted['Account'].map({
+                    'avg_rrsp': 'Average RRSP',
+                    'avg_tfsa': 'Average TFSA'
+                })
+                
+                contrib_chart = alt.Chart(df_melted).mark_bar(opacity=0.8).encode(
+                    x=alt.X('year:O', title='Year'),
+                    y=alt.Y('Amount:Q', title='Average Contribution ($)'),
+                    color=alt.Color('Account:N',
+                        scale=alt.Scale(
+                            domain=['Average RRSP', 'Average TFSA'],
+                            range=['#3b82f6', '#10b981']
+                        ),
+                        legend=alt.Legend(title='Account Type')
+                    ),
+                    xOffset='Account:N',
+                    tooltip=[
+                        alt.Tooltip('year:O', title='Year'),
+                        alt.Tooltip('Account:N', title='Account'),
+                        alt.Tooltip('Amount:Q', title='Amount', format='$,.0f')
+                    ]
+                ).properties(
+                    height=300,
+                    title='Average Contribution Patterns by Year'
+                )
+                
+                st.altair_chart(contrib_chart, use_container_width=True)
+            else:
+                st.info("📈 No contribution data available yet.")
+        
+        except Exception as e:
+            st.warning(f"Unable to load contribution patterns: {str(e)}")
+        
+        st.divider()
+        
+        # =================================================================
+        # ANALYTICS FEATURE 5: Users Approaching Contribution Limits
+        # =================================================================
+        
+        st.markdown("#### ⚠️ Users Approaching Contribution Limits")
+        
+        try:
+            # Get users near limits
+            limits_query = """
+                SELECT 
+                    u.username,
+                    t.year,
+                    COALESCE((t.data->>'rrsp_room')::numeric, 0) as rrsp_room,
+                    COALESCE((t.data->>'tfsa_room')::numeric, 0) as tfsa_room,
+                    (
+                        (COALESCE((t.data->>'base_salary')::numeric, 0) * 
+                         (COALESCE((t.data->>'biweekly_pct')::numeric, 0) + 
+                          COALESCE((t.data->>'employer_match')::numeric, 0)) / 100) +
+                        COALESCE((t.data->>'rrsp_lump_sum_optimization')::numeric, 0) +
+                        COALESCE((t.data->>'rrsp_lump_sum_additional')::numeric, 0)
+                    ) as rrsp_contrib,
+                    COALESCE((t.data->>'tfsa_lump_sum')::numeric, 0) as tfsa_contrib
+                FROM tax_planning_years t
+                JOIN users u ON t.user_id = u.user_id
+                WHERE COALESCE((t.data->>'rrsp_room')::numeric, 0) > 0
+                   OR COALESCE((t.data->>'tfsa_room')::numeric, 0) > 0
+                ORDER BY t.year DESC
+            """
+            limits_data = execute_query(limits_query)
+            
+            if limits_data and len(limits_data) > 0:
+                warnings_found = 0
+                
+                for user_data in limits_data:
+                    rrsp_room = user_data['rrsp_room']
+                    tfsa_room = user_data['tfsa_room']
+                    rrsp_contrib = user_data['rrsp_contrib']
+                    tfsa_contrib = user_data['tfsa_contrib']
+                    
+                    rrsp_remaining = rrsp_room - rrsp_contrib
+                    tfsa_remaining = tfsa_room - tfsa_contrib
+                    
+                    rrsp_util = (rrsp_contrib / rrsp_room * 100) if rrsp_room > 0 else 0
+                    tfsa_util = (tfsa_contrib / tfsa_room * 100) if tfsa_room > 0 else 0
+                    
+                    # Show warning if >90% utilized or over limit
+                    if (rrsp_util > 90 or rrsp_remaining < 0) or (tfsa_util > 90 or tfsa_remaining < 0):
+                        warnings_found += 1
+                        
+                        warning_type = "⚠️" if rrsp_remaining >= 0 and tfsa_remaining >= 0 else "🔴"
+                        
+                        st.markdown(f"""
+                            <div style="background: {'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' if rrsp_remaining >= 0 and tfsa_remaining >= 0 else 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)'}; 
+                                 padding: 16px; border-radius: 10px; margin-bottom: 12px; 
+                                 border-left: 4px solid {'#f59e0b' if rrsp_remaining >= 0 and tfsa_remaining >= 0 else '#ef4444'};">
+                                <strong>{warning_type} {user_data['username']} - {user_data['year']}</strong>
+                                <div style="margin-top: 8px; font-size: 0.95em;">
+                                    <strong>RRSP:</strong> ${rrsp_contrib:,.0f} / ${rrsp_room:,.0f} ({rrsp_util:.1f}% utilized) 
+                                    - <span style="color: {'#059669' if rrsp_remaining >= 0 else '#dc2626'};">${abs(rrsp_remaining):,.0f} {'remaining' if rrsp_remaining >= 0 else 'OVER LIMIT'}</span><br>
+                                    <strong>TFSA:</strong> ${tfsa_contrib:,.0f} / ${tfsa_room:,.0f} ({tfsa_util:.1f}% utilized) 
+                                    - <span style="color: {'#059669' if tfsa_remaining >= 0 else '#dc2626'};">${abs(tfsa_remaining):,.0f} {'remaining' if tfsa_remaining >= 0 else 'OVER LIMIT'}</span>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                if warnings_found == 0:
+                    st.success("✅ No users approaching contribution limits. All within safe ranges!")
+            else:
+                st.info("⚠️ No contribution data to analyze yet.")
+        
+        except Exception as e:
+            st.warning(f"Unable to check contribution limits: {str(e)}")
+        
+        st.divider()
+        
+        # =================================================================
+        # ANALYTICS FEATURE 6: Top Optimizers Leaderboard
+        # =================================================================
+        
+        st.markdown("#### 🏆 Top Optimizers Leaderboard")
+        
+        try:
+            # Get top optimizers
+            leaderboard_query = """
+                SELECT 
+                    u.username,
+                    COUNT(t.record_id) as total_years,
+                    SUM(CASE 
+                        WHEN (
+                            COALESCE((t.data->>'t4_gross_income')::numeric, 0) + 
+                            COALESCE((t.data->>'other_income')::numeric, 0) -
+                            COALESCE((t.data->>'rrsp_lump_sum_optimization')::numeric, 0) - 
+                            COALESCE((t.data->>'rrsp_lump_sum_additional')::numeric, 0) -
+                            (COALESCE((t.data->>'base_salary')::numeric, 0) * 
+                             (COALESCE((t.data->>'biweekly_pct')::numeric, 0) + 
+                              COALESCE((t.data->>'employer_match')::numeric, 0)) / 100)
+                        ) < 181440 THEN 1 ELSE 0 
+                    END) as optimized_years,
+                    SUM(
+                        (COALESCE((t.data->>'base_salary')::numeric, 0) * 
+                         (COALESCE((t.data->>'biweekly_pct')::numeric, 0) + 
+                          COALESCE((t.data->>'employer_match')::numeric, 0)) / 100) +
+                        COALESCE((t.data->>'rrsp_lump_sum_optimization')::numeric, 0) +
+                        COALESCE((t.data->>'rrsp_lump_sum_additional')::numeric, 0)
+                    ) as total_rrsp_contrib,
+                    SUM(COALESCE((t.data->>'tfsa_lump_sum')::numeric, 0)) as total_tfsa_contrib
+                FROM users u
+                LEFT JOIN tax_planning_years t ON u.user_id = t.user_id
+                WHERE t.record_id IS NOT NULL
+                GROUP BY u.username
+                HAVING COUNT(t.record_id) > 0
+                ORDER BY optimized_years DESC, total_rrsp_contrib DESC
+                LIMIT 10
+            """
+            leaderboard_data = execute_query(leaderboard_query)
+            
+            if leaderboard_data and len(leaderboard_data) > 0:
+                st.caption("Top 10 users by optimization success and contribution amounts")
+                
+                # Display leaderboard
+                for idx, user in enumerate(leaderboard_data, 1):
+                    opt_rate = (user['optimized_years'] / user['total_years'] * 100) if user['total_years'] > 0 else 0
+                    total_contrib = user['total_rrsp_contrib'] + user['total_tfsa_contrib']
+                    
+                    # Medal emoji
+                    medal = ""
+                    if idx == 1:
+                        medal = "🥇"
+                    elif idx == 2:
+                        medal = "🥈"
+                    elif idx == 3:
+                        medal = "🥉"
+                    else:
+                        medal = f"#{idx}"
+                    
+                    # Color based on rank
+                    if idx <= 3:
+                        bg_color = "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)"
+                        border_color = "#f59e0b"
+                    else:
+                        bg_color = "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)"
+                        border_color = "#3b82f6"
+                    
+                    st.markdown(f"""
+                        <div style="background: {bg_color}; 
+                             padding: 16px 20px; border-radius: 10px; margin-bottom: 10px; 
+                             border-left: 4px solid {border_color}; display: flex; align-items: center;">
+                            <div style="font-size: 1.5em; margin-right: 16px; min-width: 50px;">{medal}</div>
+                            <div style="flex: 1;">
+                                <strong style="font-size: 1.1em;">{user['username']}</strong>
+                                <div style="margin-top: 4px; font-size: 0.9em;">
+                                    <strong>Optimization:</strong> {user['optimized_years']}/{user['total_years']} years ({opt_rate:.1f}%) • 
+                                    <strong>Total Contributions:</strong> ${total_contrib:,.0f} 
+                                    (RRSP: ${user['total_rrsp_contrib']:,.0f}, TFSA: ${user['total_tfsa_contrib']:,.0f})
+                                </div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("🏆 Leaderboard will populate as users create planning years.")
+        
+        except Exception as e:
+            st.warning(f"Unable to load leaderboard: {str(e)}")
 
 # ============================================================================
 # USER PROFILE PAGE
