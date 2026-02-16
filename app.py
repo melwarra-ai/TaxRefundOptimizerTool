@@ -43,13 +43,22 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.4.0 - POWER ADMIN & NOTIFICATIONS"
+APP_VERSION = "6.4.1 - POWER ADMIN & NOTIFICATIONS (Bug Fix)"
 APP_DATE = "February 15, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.4.1 - Bug Fix (Feb 15, 2026)
+
+### 🐛 BUG FIXES:
+- Fixed: "Add Year" button now works correctly
+- Fixed: save_year_data() missing user_id parameter
+- All year management functions now working properly
+
+---
+
 ## 🎉 Version 6.4.0 - Power Admin & Notifications (Feb 15, 2026)
 
 ### ✨ NEW FEATURES:
@@ -3288,7 +3297,7 @@ if st.session_state.current_page == "Home":
         if st.button("➕ Add Year", use_container_width=True, type="primary"):
             if str(new_year_input) not in all_history:
                 # Create empty year entry
-                save_year_data(new_year_input, {
+                save_year_data(st.session_state.user_id, new_year_input, {
                     "t4_gross_income": 0,
                     "other_income": 0,
                     "base_salary": 0,
