@@ -4323,33 +4323,114 @@ else:
                 )
             
             if submitted:
-                success = save_year_data(st.session_state.user_id, selected_year, {
-                    "t4_gross_income": t4_gross_income,
-                    "other_income": other_income,
-                    "base_salary": base_salary,
-                    "biweekly_pct": biweekly_pct,
-                    "employer_match": employer_match_cap,
-                    "rrsp_lump_sum_optimization": rrsp_lump_sum_optimization,
-                    "rrsp_lump_sum_additional": rrsp_lump_sum_additional,
-                    "tfsa_lump_sum": tfsa_lump_sum,
-                    "rrsp_room": rrsp_room,
-                    "tfsa_room": tfsa_room,
-                    "rrsp_balance_start": rrsp_balance_start,
-                    "tfsa_balance_start": tfsa_balance_start,
-                    "target_cagr": target_cagr,
-                    # Spousal RRSP fields
-                    "spouse_name": spouse_name,
-                    "spousal_rrsp_contribution": spousal_rrsp_contribution,
-                    "spouse_rrsp_balance_start": spouse_rrsp_balance_start,
-                    "spouse_gross_income": spouse_gross_income,
-                    "spouse_age": spouse_age,
-                    "spouse_rrsp_room": spouse_rrsp_room,
-                    "last_spousal_contribution_year": selected_year if spousal_rrsp_contribution > 0 else year_data.get("last_spousal_contribution_year", 0)
-                })
+                # ═══════════════════════════════════════════════════════════════
+                # PRE-SAVE VALIDATION - Check for over-contribution BEFORE saving
+                # ═══════════════════════════════════════════════════════════════
                 
-                if success:
-                    st.session_state.saved_flag = True
-                    st.rerun()
+                # Calculate total RRSP contributions from form inputs
+                _employee_contrib = base_salary * (biweekly_pct / 100)
+                _employer_contrib = base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+                _periodic = _employee_contrib + _employer_contrib
+                _lump = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
+                _personal_total = _periodic + _lump
+                _combined_total = _personal_total + spousal_rrsp_contribution
+                _over_amount = _combined_total - rrsp_room
+                
+                # Check 1: Over-contribution detected
+                if _over_amount > 0:
+                    st.error(f"""
+                    ### ⚠️ RRSP Room Exceeded — Cannot Save
+                    
+                    **Your total RRSP contributions:** ${_combined_total:,.0f}  
+                    **Your available room:** ${rrsp_room:,.0f}  
+                    **Over-contribution:** ${_over_amount:,.0f}  
+                    
+                    CRA charges **1% per month penalty** on amounts over $2,000 above your limit.  
+                    **Estimated monthly penalty:** ${max(0, _over_amount - 2000) * 0.01:,.0f}/month
+                    """)
+                    
+                    st.markdown("---")
+                    st.markdown("### 💡 Smart Solutions to Fix This:")
+                    
+                    # Solution 1: Spousal RRSP (if not already using it)
+                    if spousal_rrsp_contribution == 0:
+                        st.success(f"""
+                        **✅ Recommended Solution: Use Spousal RRSP**
+                        
+                        Instead of contributing ${_over_amount:,.0f} over your limit:
+                        - Move ${_over_amount:,.0f} to **Spousal RRSP** (in the "Spouse's RRSP (Optional)" section below)
+                        - Still uses YOUR ${rrsp_room:,.0f} room ✓
+                        - You still get the full tax refund ✓
+                        - Spouse owns the account — withdrawals taxed at their (lower) rate ✓
+                        - **No CRA penalty** ✓
+                        
+                        📍 **Action:** Scroll down to the **"👫 Spouse's RRSP (Optional)"** section and expand it.  
+                        Put **${_over_amount:,.0f}** in "Amount to Spouse's RRSP" instead of adding it to your personal RRSP lump sums.
+                        """)
+                    else:
+                        st.warning(f"""
+                        **⚠️ You're already using Spousal RRSP**
+                        
+                        Your spousal RRSP contribution: ${spousal_rrsp_contribution:,.0f}  
+                        Your personal RRSP contribution: ${_personal_total:,.0f}  
+                        Combined total: ${_combined_total:,.0f}  
+                        
+                        This still exceeds your ${rrsp_room:,.0f} room by ${_over_amount:,.0f}.
+                        """)
+                    
+                    # Solution 2: Verify NOA
+                    st.info(f"""
+                    **📝 Option: Verify Your RRSP Room**
+                    
+                    Double-check your Notice of Assessment:
+                    - Your NOA shows your exact RRSP room for {selected_year}
+                    - If your actual room is higher than ${rrsp_room:,.0f}, update "Your RRSP Room" field above
+                    - [canada.ca/my-cra-account](https://www.canada.ca/en/revenue-agency/services/e-services/e-services-individuals/account-individuals.html)
+                    """)
+                    
+                    # Solution 3: Accept penalty (discouraged)
+                    st.warning(f"""
+                    **⚠️ Option: Contribute Anyway (Not Recommended)**
+                    
+                    You can proceed with the over-contribution, but:
+                    - CRA will charge you **${max(0, _over_amount - 2000) * 0.01:,.0f}/month** in penalties
+                    - Penalty applies until you withdraw the excess or gain more room
+                    - You must file Form T1-OVP with your tax return
+                    
+                    💡 **Better approach:** Use spousal RRSP or reduce your contribution to ${rrsp_room:,.0f}.
+                    """)
+                    
+                    st.error("🚫 **Save blocked.** Please fix the over-contribution issue above before saving.")
+                
+                # Check 2: No over-contribution — proceed with save
+                else:
+                    success = save_year_data(st.session_state.user_id, selected_year, {
+                        "t4_gross_income": t4_gross_income,
+                        "other_income": other_income,
+                        "base_salary": base_salary,
+                        "biweekly_pct": biweekly_pct,
+                        "employer_match": employer_match_cap,
+                        "rrsp_lump_sum_optimization": rrsp_lump_sum_optimization,
+                        "rrsp_lump_sum_additional": rrsp_lump_sum_additional,
+                        "tfsa_lump_sum": tfsa_lump_sum,
+                        "rrsp_room": rrsp_room,
+                        "tfsa_room": tfsa_room,
+                        "rrsp_balance_start": rrsp_balance_start,
+                        "tfsa_balance_start": tfsa_balance_start,
+                        "target_cagr": target_cagr,
+                        # Spousal RRSP fields
+                        "spouse_name": spouse_name,
+                        "spousal_rrsp_contribution": spousal_rrsp_contribution,
+                        "spouse_rrsp_balance_start": spouse_rrsp_balance_start,
+                        "spouse_gross_income": spouse_gross_income,
+                        "spouse_age": spouse_age,
+                        "spouse_rrsp_room": spouse_rrsp_room,
+                        "last_spousal_contribution_year": selected_year if spousal_rrsp_contribution > 0 else year_data.get("last_spousal_contribution_year", 0)
+                    })
+                    
+                    if success:
+                        st.session_state.saved_flag = True
+                        st.rerun()
             
             if reset:
                 delete_year_data(st.session_state.user_id, selected_year)
@@ -4575,16 +4656,31 @@ else:
         
         # Item 1: RRSP contribution needed
         if deficit > 0:
-            pending_items.append({
-                "item": "Increase RRSP Contributions",
-                "current": f"${total_rrsp_contributions:,.0f}",
-                "target": f"${total_rrsp_contributions + deficit:,.0f}",
-                "action": f"Add ${deficit:,.0f} to either 'RRSP Lump Sum (Tax Optimization)' or 'RRSP Lump Sum (Additional Refund)' in the sidebar",
-                "impact": f"Saves ${deficit * 0.4797:,.0f} in taxes at 47.97% Penthouse rate"
-            })
+            # Check if user has enough room for the full amount
+            if deficit <= remaining_rrsp_room:
+                # Sufficient room - straightforward suggestion
+                pending_items.append({
+                    "item": "Increase RRSP Contributions",
+                    "current": f"${total_rrsp_contributions:,.0f}",
+                    "target": f"${total_rrsp_contributions + deficit:,.0f}",
+                    "action": f"Add ${deficit:,.0f} to either 'RRSP Lump Sum (Tax Optimization)' or 'RRSP Lump Sum (Additional Refund)' in the sidebar. You have ${remaining_rrsp_room:,.0f} room available.",
+                    "impact": f"Saves ${deficit * 0.4797:,.0f} in taxes at 47.97% Penthouse rate"
+                })
+            else:
+                # Insufficient room - suggest split approach with spousal RRSP
+                room_portion = remaining_rrsp_room
+                spousal_portion = deficit - remaining_rrsp_room
+                
+                pending_items.append({
+                    "item": "Increase RRSP Contributions",
+                    "current": f"${total_rrsp_contributions:,.0f}",
+                    "target": f"${total_rrsp_contributions + deficit:,.0f}",
+                    "action": f"⚠️ You need ${deficit:,.0f} but only have ${remaining_rrsp_room:,.0f} room available. **Recommended split:** (1) Add ${room_portion:,.0f} to your personal RRSP lump sums, (2) Add ${spousal_portion:,.0f} to **Spousal RRSP** in the '👫 Spouse's RRSP (Optional)' section below. This uses your ${rrsp_room:,.0f} room efficiently and avoids CRA penalties.",
+                    "impact": f"Saves ${deficit * 0.4797:,.0f} in taxes at 47.97% Penthouse rate"
+                })
         
-        # Item 2: Room availability check
-        if deficit > remaining_rrsp_room:
+        # Item 2: Room availability check - ONLY show if insufficient AND spousal not suggested above
+        if deficit > remaining_rrsp_room and deficit == 0:
             pending_items.append({
                 "item": "⚠️ Insufficient RRSP Room",
                 "current": f"${remaining_rrsp_room:,.0f} available",
