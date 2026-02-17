@@ -63,13 +63,54 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.5.2 - Professional Messaging"
+APP_VERSION = "6.5.3 - UI/UX Polish"
 APP_DATE = "February 17, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.5.3 - UI/UX Polish (Feb 17, 2026)
+
+### 🎨 UI/UX IMPROVEMENTS:
+
+**📝 Pending Items - Fixed Rendering:**
+- **FIXED:** Markdown formatting now renders properly (no more raw asterisks showing)
+- **FIXED:** Text no longer runs together without spaces
+- Changed from HTML-embedded text to proper Streamlit markdown rendering
+- Added visual hierarchy with clean sections and proper headers
+- Action items now display with proper headings (####), bullet points (•), and dividers (---)
+- Impact shown in green success box for better visibility
+
+**🎨 Sidebar - Removed Duplication:**
+- **FIXED:** Removed duplicate "Canadian Tax Optimizer" branding
+- **FIXED:** Removed duplicate "Version Info" elements  
+- **FIXED:** Removed "Back to Home" button from inappropriate pages
+- Profile page sidebar now matches main sidebar styling (consistent branding)
+- Version Info page sidebar now matches main sidebar styling
+- Changed "Back to App" to "🏠 Back to Home" for consistency
+- Clean, minimal sidebar across all pages
+
+**Before (Broken):**
+```
+Raw text: *moreInRRSPcontributions.However,youonlyhave*
+Duplicate branding at top and bottom
+"Back to Home" showing on all pages
+```
+
+**After (Fixed):**
+```
+Clean markdown: **Insufficient Room for Full Optimization**
+### 📊 Recommended Strategy:
+#### 1. Use Your Remaining Room
+- Proper bullets with spacing
+- Headers render correctly
+Single branding section at top only
+Navigation buttons only where appropriate
+```
+
+---
+
 ## 🎉 Version 6.5.2 - Professional Messaging & Clarity (Feb 17, 2026)
 
 ### ✨ IMPROVEMENTS:
@@ -2490,11 +2531,31 @@ def show_profile_page():
     """Display user profile"""
     
     with st.sidebar:
-        if st.button("⬅️ Back to App", use_container_width=True, key="profile_back_btn"):
-            st.session_state.current_page = "Home"
-            st.rerun()
+        # User info with app branding (consistent with main sidebar)
+        st.markdown(f"""
+            <div style="text-align: center; padding: 12px 0; margin-bottom: 8px;">
+                <div style="font-size: 1.3em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                    👤 {st.session_state.username}
+                </div>
+                <div style="font-size: 0.8em; color: #64748b; margin-bottom: 8px;">
+                    Role: {st.session_state.role.upper()}
+                </div>
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 8px;">
+                    <div style="font-size: 0.85em; font-weight: 600; color: #3b82f6;">
+                        📊 {APP_NAME}
+                    </div>
+                    <div style="font-size: 0.75em; color: #94a3b8;">
+                        v{APP_VERSION.split(' - ')[0]} • {APP_DATE.split(',')[0].split()[-1]}, {APP_DATE.split()[-1]}
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
         
         st.divider()
+        
+        if st.button("🏠 Back to Home", use_container_width=True, key="profile_back_btn"):
+            st.session_state.current_page = "Home"
+            st.rerun()
         
         if st.button("🚪 Logout", use_container_width=True, type="secondary", key="profile_logout_btn"):
             logout_user(st.session_state.session_token)
@@ -2636,7 +2697,29 @@ if st.session_state.current_page == "Profile":
 if st.session_state.current_page == "Version":
     # Version Info Page
     with st.sidebar:
-        if st.button("⬅️ Back to App", use_container_width=True, key="version_back_btn"):
+        # User info with app branding (consistent with main sidebar)
+        st.markdown(f"""
+            <div style="text-align: center; padding: 12px 0; margin-bottom: 8px;">
+                <div style="font-size: 1.3em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                    👤 {st.session_state.username}
+                </div>
+                <div style="font-size: 0.8em; color: #64748b; margin-bottom: 8px;">
+                    Role: {st.session_state.role.upper()}
+                </div>
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 8px;">
+                    <div style="font-size: 0.85em; font-weight: 600; color: #3b82f6;">
+                        📊 {APP_NAME}
+                    </div>
+                    <div style="font-size: 0.75em; color: #94a3b8;">
+                        v{APP_VERSION.split(' - ')[0]} • {APP_DATE.split(',')[0].split()[-1]}, {APP_DATE.split()[-1]}
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.divider()
+        
+        if st.button("🏠 Back to Home", use_container_width=True, key="version_back_btn"):
             st.session_state.current_page = "Home"
             st.rerun()
     
@@ -4892,26 +4975,28 @@ else:
                         f"⚠️ **Insufficient Room for Full Optimization**\n\n"
                         f"To fully optimize and avoid the Penthouse bracket, you need **${deficit:,.0f}** more in RRSP contributions. "
                         f"However, you only have **${remaining_rrsp_room:,.0f}** room remaining in your {selected_year} contribution limit.\n\n"
-                        f"**📊 Recommended Strategy:**\n\n"
-                        f"**1. Use Your Remaining Room (Partial Optimization)**\n"
-                        f"   • Add ${remaining_rrsp_room:,.0f} to your RRSP contributions in the sidebar\n"
-                        f"   • You can split this between 'Personal RRSP' and 'Spousal RRSP' — both use the same ${rrsp_room:,.0f} room pool\n"
-                        f"   • Tax savings: ${tax_saved_partial:,.0f} (at 47.97% Penthouse rate)\n"
-                        f"   • Result: Reduces Penthouse exposure from ${deficit:,.0f} to ${penthouse_remaining_after:,.0f}\n\n"
-                        f"**2. Accept Partial Optimization This Year**\n"
-                        f"   • You'll still have ${penthouse_remaining_after:,.0f} in the Penthouse bracket\n"
-                        f"   • Tax cost on remaining exposure: ${penthouse_remaining_after * 0.4797:,.0f}\n"
-                        f"   • This is still better than ${tax_saved_full:,.0f} if you did nothing\n\n"
-                        f"**3. Plan for Full Optimization Next Year ({selected_year + 1})**\n"
-                        f"   • Based on your {selected_year} income, you'll receive ~${next_year_room:,.0f} new RRSP room\n"
-                        f"   • Use that room to eliminate the remaining ${penthouse_remaining_after:,.0f} exposure\n"
-                        f"   • Additional tax savings in {selected_year + 1}: ${penthouse_remaining_after * 0.4797:,.0f}\n\n"
-                        f"**4. Alternative: Spouse's Own RRSP (if applicable)**\n"
-                        f"   • If your spouse has income and their own RRSP room (from THEIR Notice of Assessment)\n"
-                        f"   • They can contribute to their own RRSP using THEIR room (separate from yours)\n"
-                        f"   • THEY would receive the tax refund on their tax return\n"
-                        f"   • This is different from 'Spousal RRSP' — it doesn't help YOUR tax optimization\n"
-                        f"   • However, it reduces household tax burden and builds family wealth\n\n"
+                        f"---\n\n"
+                        f"### 📊 Recommended Strategy:\n\n"
+                        f"#### 1. Use Your Remaining Room (Partial Optimization)\n\n"
+                        f"- Add **${remaining_rrsp_room:,.0f}** to your RRSP contributions in the sidebar\n"
+                        f"- You can split this between 'Personal RRSP' and 'Spousal RRSP' — both use the same ${rrsp_room:,.0f} room pool\n"
+                        f"- **Tax savings:** ${tax_saved_partial:,.0f} (at 47.97% Penthouse rate)\n"
+                        f"- **Result:** Reduces Penthouse exposure from ${deficit:,.0f} to ${penthouse_remaining_after:,.0f}\n\n"
+                        f"#### 2. Accept Partial Optimization This Year\n\n"
+                        f"- You'll still have **${penthouse_remaining_after:,.0f}** in the Penthouse bracket\n"
+                        f"- **Tax cost on remaining exposure:** ${penthouse_remaining_after * 0.4797:,.0f}\n"
+                        f"- This is still better than ${tax_saved_full:,.0f} if you did nothing\n\n"
+                        f"#### 3. Plan for Full Optimization Next Year ({selected_year + 1})\n\n"
+                        f"- Based on your {selected_year} income, you'll receive **~${next_year_room:,.0f}** new RRSP room\n"
+                        f"- Use that room to eliminate the remaining ${penthouse_remaining_after:,.0f} exposure\n"
+                        f"- **Additional tax savings in {selected_year + 1}:** ${penthouse_remaining_after * 0.4797:,.0f}\n\n"
+                        f"#### 4. Alternative: Spouse's Own RRSP (if applicable)\n\n"
+                        f"- If your spouse has income and their own RRSP room (from THEIR Notice of Assessment)\n"
+                        f"- They can contribute to their own RRSP using THEIR room (separate from yours)\n"
+                        f"- THEY would receive the tax refund on their tax return\n"
+                        f"- This is different from 'Spousal RRSP' — it doesn't help YOUR tax optimization\n"
+                        f"- However, it reduces household tax burden and builds family wealth\n\n"
+                        f"---\n\n"
                         f"💡 **Important:** Personal RRSP and Spousal RRSP both count against YOUR ${rrsp_room:,.0f} room from your Notice of Assessment. "
                         f"They are not separate pools — you have one total room limit shared between both."
                     ),
@@ -4922,14 +5007,21 @@ else:
         
         if pending_items:
             for idx, item in enumerate(pending_items, 1):
+                # Use card styling but render action as proper markdown
                 st.markdown(f"""
-                    <div class="premium-card" style="border-left: 4px solid #f59e0b;">
-                        <h4>Item {idx}: {item['item']}</h4>
-                        <p><strong>Current:</strong> {item['current']} | <strong>Target:</strong> {item['target']}</p>
-                        <p><strong>Action Required:</strong> {item['action']}</p>
-                        <p style="color: #059669;"><strong>Impact:</strong> {item['impact']}</p>
+                    <div class="premium-card" style="border-left: 4px solid #f59e0b; padding: 20px;">
+                        <h4 style="margin-top: 0;">Item {idx}: {item['item']}</h4>
+                        <p style="margin-bottom: 16px;"><strong>Current:</strong> {item['current']} | <strong>Target:</strong> {item['target']}</p>
                     </div>
                 """, unsafe_allow_html=True)
+                
+                # Render action as clean markdown (not inside HTML)
+                with st.container():
+                    st.markdown("**Action Required:**")
+                    st.markdown(item['action'])
+                    st.success(f"**Impact:** {item['impact']}")
+                
+                st.markdown("")  # Spacing
         else:
             st.success("✅ No pending items - year is optimized!")
     
