@@ -1,25 +1,45 @@
 """
-Canadian Tax Optimizer - PROFESSIONAL EDITION with Advanced Analytics
-Version 6.3.0 - Complete Analytics Dashboard
+Canadian Tax Optimizer - PROFESSIONAL EDITION
+Version 6.5.0 - Spousal RRSP Phase 1
 
-Professional application featuring:
-- ✨ Institutional-grade user interface
-- 👑 Advanced admin dashboard with 4 colored metric cards
-- 📊 COMPLETE Analytics Dashboard (6 analytics modules)
-- 🎨 Professional login page with animated branding
-- 📈 User activity trends and engagement metrics
-- 💰 Portfolio value growth over time
-- 🎯 Tax optimization success rate tracking
-- 📊 RRSP/TFSA contribution pattern analysis
-- ⚠️ Contribution limit warnings
-- 🏆 Top optimizers leaderboard
-- 🔐 Multi-user authentication system
-- 💼 All tax optimization features (RRSP, TFSA, multi-year planning)
-- 📈 Portfolio tracking with growth projections
-- 💡 Strategic insights and recommendations
+Professional multi-user tax optimization platform featuring:
+
+── CORE TAX FEATURES ──────────────────────────────────────────
+- 💼 Multi-year RRSP & TFSA planning with CRA deadline tracking
+- 🏦 Personal RRSP (paycheck + employer match + lump sums)
+- 👫 Spousal RRSP tracking (Phase 1) — room, refund, portfolio
+- 🌱 TFSA contribution management
+- 🎯 Penthouse bracket (47.97%) avoidance optimization
+- 💡 Strategic insights & recommendations
+- 📈 Portfolio growth projections with CAGR
+
+── SPOUSAL RRSP (v6.5.0 NEW) ──────────────────────────────────
+- 👫 Spousal RRSP contribution input and tracking
+- 📊 Combined room usage: personal + spousal vs your NOA limit
+- 💰 Refund calculated on full combined amount (CRA rule)
+- 🚨 Over-contribution detection with CRA penalty estimate
+- ⚠️ 90%+ room warning with spousal RRSP suggestion
+- 📅 3-Year Attribution Rule tracker and warning
+- ⚠️ High-income spouse bracket warning
+- 🚫 Age-71 CRA contribution block enforcement
+- 📊 Portfolio table: personal RRSP + spousal RRSP + TFSA + household total
+- 🔵🟣 Visual room split bar (personal vs spousal vs available)
+
+── ADMIN & ANALYTICS ──────────────────────────────────────────
+- 👑 Admin dashboard with 4 colored metric cards
+- 📊 Complete analytics dashboard (6 modules)
+- 🔐 User impersonation, selective reset, nuclear reset
+- 📧 Email notification system (SMTP)
+- ℹ️ Version info page with full changelog
+
+── UI & PLATFORM ──────────────────────────────────────────────
+- 🎨 Institutional-grade professional UI
+- ⚡ Quick Stats cards + contribution progress bars
+- 🔐 Multi-user authentication (PostgreSQL)
+- ☁️ Streamlit Cloud deployment ready
+- 🔄 Auto-migration database schema
 
 Based on institutional portfolio management design principles
-Ready for enterprise deployment on Streamlit Cloud
 """
 
 import streamlit as st
