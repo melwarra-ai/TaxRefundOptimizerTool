@@ -63,13 +63,40 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.5.0 - Spousal RRSP Phase 1"
+APP_VERSION = "6.5.1 - Pending Items Fix"
 APP_DATE = "February 17, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.5.1 - Pending Items Logic Fix (Feb 17, 2026)
+
+### 🐛 CRITICAL BUG FIX:
+- Fixed: Pending Items no longer suggests adding to spousal RRSP when room = $0
+- Fixed: Logic now correctly handles three scenarios:
+  1. **No room left** ($0): Shows "room fully used, cannot optimize" message
+  2. **Enough room**: Suggests straightforward RRSP addition
+  3. **Partial room**: Suggests using remaining room for partial optimization
+
+### 📝 What Changed:
+**Before (Buggy):**
+- User has $44,000 room
+- User enters $44,000 personal RRSP
+- App wrongly suggested: "Add $49,560 to spousal RRSP" 
+- Result: Over-contribution error!
+
+**After (Fixed):**
+- App correctly says: "Room fully used. Cannot add more RRSP (personal OR spousal)"
+- Provides actionable alternatives: verify NOA, accept partial optimization, plan for next year
+
+### 💡 Clarification Added:
+- Reminder: Spousal RRSP uses YOUR contribution room (not separate room)
+- When your room = $0, you cannot contribute to spousal RRSP
+- Next year's projected room amount shown
+
+---
+
 ## 🎉 Version 6.5.0 - Spousal RRSP Phase 1 (Feb 17, 2026)
 
 ### ✨ NEW FEATURES:
@@ -2488,8 +2515,25 @@ all_history = load_all_data(st.session_state.user_id)
 
 # Sidebar navigation
 with st.sidebar:
-    st.markdown(f"### 👤 {st.session_state.username}")
-    st.caption(f"Role: {st.session_state.role.upper()}")
+    # User info with app branding
+    st.markdown(f"""
+        <div style="text-align: center; padding: 12px 0; margin-bottom: 8px;">
+            <div style="font-size: 1.3em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                👤 {st.session_state.username}
+            </div>
+            <div style="font-size: 0.8em; color: #64748b; margin-bottom: 8px;">
+                Role: {st.session_state.role.upper()}
+            </div>
+            <div style="border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 8px;">
+                <div style="font-size: 0.85em; font-weight: 600; color: #3b82f6;">
+                    📊 {APP_NAME}
+                </div>
+                <div style="font-size: 0.75em; color: #94a3b8;">
+                    v{APP_VERSION.split(' - ')[0]} • {APP_DATE.split(',')[0].split()[-1]}, {APP_DATE.split()[-1]}
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
     
     st.divider()
     
