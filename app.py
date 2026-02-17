@@ -3436,6 +3436,7 @@ if st.session_state.current_page == "Home":
                     "spouse_rrsp_balance_start": 0,
                     "spouse_gross_income": 0,
                     "spouse_age": 0,
+                    "spouse_rrsp_room": 0,
                     "last_spousal_contribution_year": 0
                 })
                 st.success(f"✓ Year {new_year_input} added successfully!")
@@ -4083,11 +4084,11 @@ else:
                 default_tfsa_room = prev_tfsa_room_remaining + new_tfsa_room
             
             rrsp_room = st.number_input(
-                "Available RRSP Room",
+                "Your Available RRSP Room",
                 value=float(year_data.get("rrsp_room", default_rrsp_room)),
                 step=1000.0,
                 min_value=0.0,
-                help="From your latest Notice of Assessment (auto-filled from previous year if available)"
+                help="From YOUR latest Notice of Assessment. Both your personal and spousal RRSP contributions draw from this room."
             )
             
             tfsa_room = st.number_input(
@@ -4098,8 +4099,94 @@ else:
                 help="From CRA MyAccount (auto-filled from previous year if available)"
             )
             
+            # Spouse RRSP room — informational only, does NOT affect calculations
+            spouse_rrsp_room = st.number_input(
+                f"{'Spouse' if not year_data.get('spouse_name') else year_data.get('spouse_name')}'s RRSP Room (optional)",
+                value=float(year_data.get("spouse_rrsp_room", 0)),
+                step=1000.0,
+                min_value=0.0,
+                help=(
+                    "From your SPOUSE'S Notice of Assessment. "
+                    "ℹ️ This does NOT affect your calculations — your spousal RRSP contributions "
+                    "use YOUR room, not theirs. This field is for your household records only."
+                )
+            )
+            
             if prev_year in all_history and default_rrsp_room > 0:
-                st.caption(f"ℹ️ Auto-calculated from {prev_year} carryover + new room")
+                st.caption(f"ℹ️ Your room auto-calculated from {prev_year} carryover + new room")
+            
+            # ── LIVE ROOM USAGE SUMMARY ─────────────────────────────────────
+            # Calculate current totals from form inputs already entered above
+            _biweekly_total = (
+                base_salary * (biweekly_pct / 100) +
+                base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+            )
+            _personal_lump = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
+            _personal_total = _biweekly_total + _personal_lump
+            _total_used = _personal_total + spousal_rrsp_contribution
+            _remaining = rrsp_room - _total_used
+            _over = max(0, -_remaining)
+            
+            if rrsp_room > 0:
+                st.markdown("**📊 Your RRSP Room Usage Summary**")
+                
+                col_r1, col_r2 = st.columns(2)
+                with col_r1:
+                    st.metric("Your Total Room", f"${rrsp_room:,.0f}",
+                              help="From your NOA — covers both personal and spousal contributions")
+                    st.metric("Personal RRSP Used", f"${_personal_total:,.0f}",
+                              help="Paycheck contributions + employer match + lump sums")
+                with col_r2:
+                    st.metric(
+                        "Spousal RRSP Used",
+                        f"${spousal_rrsp_contribution:,.0f}",
+                        help="Counts against YOUR room (CRA rule)"
+                    )
+                    if _over > 0:
+                        st.metric("⚠️ Over-Contribution", f"${_over:,.0f}",
+                                  delta=f"CRA penalty ~${max(0,_over-2000)*0.01:,.0f}/mo",
+                                  delta_color="inverse",
+                                  help="Amount exceeding your room. CRA charges 1%/month on amounts over $2,000 buffer.")
+                    else:
+                        st.metric("Room Remaining", f"${max(0,_remaining):,.0f}",
+                                  delta=f"{max(0,_remaining/rrsp_room*100):.1f}% available" if rrsp_room > 0 else None,
+                                  help="Remaining room after personal + spousal contributions")
+                
+                # Visual split bar
+                if _total_used > 0:
+                    _p_pct = min(100, _personal_total / rrsp_room * 100)
+                    _s_pct = min(100 - _p_pct, spousal_rrsp_contribution / rrsp_room * 100)
+                    _rem_pct = max(0, 100 - _p_pct - _s_pct)
+                    _bar_color = "#ef4444" if _over > 0 else "#3b82f6"
+                    st.markdown(f"""
+                        <div style="background:#e2e8f0; border-radius:6px; overflow:hidden; height:22px; display:flex; margin-top:4px;">
+                            <div style="background:{_bar_color}; width:{_p_pct:.1f}%; display:flex; align-items:center;
+                                 justify-content:center; color:white; font-size:0.75em; font-weight:600; padding:0 3px; white-space:nowrap;">
+                                {f"You {_p_pct:.0f}%" if _p_pct > 10 else ""}
+                            </div>
+                            <div style="background:#8b5cf6; width:{_s_pct:.1f}%; display:flex; align-items:center;
+                                 justify-content:center; color:white; font-size:0.75em; font-weight:600; padding:0 3px; white-space:nowrap;">
+                                {f"Spouse {_s_pct:.0f}%" if _s_pct > 10 else ""}
+                            </div>
+                            <div style="background:#e2e8f0; width:{_rem_pct:.1f}%; display:flex; align-items:center;
+                                 justify-content:center; color:#94a3b8; font-size:0.75em; padding:0 3px;">
+                                {f"Free {_rem_pct:.0f}%" if _rem_pct > 10 else ""}
+                            </div>
+                        </div>
+                        <div style="font-size:0.78em; color:#64748b; margin-top:4px;">
+                            🔵 Personal: ${_personal_total:,.0f} &nbsp;|&nbsp;
+                            🟣 Spousal: ${spousal_rrsp_contribution:,.0f} &nbsp;|&nbsp;
+                            {'🔴 OVER: $' + f'{_over:,.0f}' if _over > 0 else '⬜ Available: $' + f'{max(0,_remaining):,.0f}'}
+                        </div>
+                    """, unsafe_allow_html=True)
+                
+                # Spouse's own room — informational note
+                if spouse_rrsp_room > 0:
+                    _spouse_label = year_data.get('spouse_name', 'Spouse') or 'Spouse'
+                    st.info(
+                        f"ℹ️ **{_spouse_label}'s own RRSP room: ${spouse_rrsp_room:,.0f}** — "
+                        f"for reference only. Their room is used if THEY contribute to their own RRSP independently."
+                    )
             
             st.markdown("### 📈 Portfolio Tracking")
             
@@ -4196,6 +4283,7 @@ else:
                     "spouse_rrsp_balance_start": spouse_rrsp_balance_start,
                     "spouse_gross_income": spouse_gross_income,
                     "spouse_age": spouse_age,
+                    "spouse_rrsp_room": spouse_rrsp_room,
                     "last_spousal_contribution_year": selected_year if spousal_rrsp_contribution > 0 else year_data.get("last_spousal_contribution_year", 0)
                 })
                 
@@ -4221,6 +4309,7 @@ else:
     spouse_rrsp_balance_start = year_data.get("spouse_rrsp_balance_start", 0)
     spouse_gross_income = year_data.get("spouse_gross_income", 0)
     spouse_age = year_data.get("spouse_age", 0)
+    spouse_rrsp_room = year_data.get("spouse_rrsp_room", 0)
     last_spousal_year = year_data.get("last_spousal_contribution_year", 0)
     spouse_label = spouse_name if spouse_name else "Spouse"
     
