@@ -3983,68 +3983,6 @@ else:
             
             st.caption(f"💰 Total RRSP Lump Sum: ${rrsp_lump_sum_optimization + rrsp_lump_sum_additional:,.0f}")
             
-            # ------------------------------------------------------------------
-            # SPOUSAL RRSP SECTION
-            # ------------------------------------------------------------------
-            st.markdown("### 👫 Spousal RRSP")
-            st.caption("Contributions to your spouse's RRSP count against YOUR room but grow in their name")
-            
-            spouse_name = st.text_input(
-                "Spouse Name (optional)",
-                value=year_data.get("spouse_name", ""),
-                placeholder="e.g. Jane",
-                help="Used for display purposes only"
-            )
-            
-            spousal_rrsp_contribution = st.number_input(
-                "Spousal RRSP Contribution",
-                value=float(year_data.get("spousal_rrsp_contribution", 0)),
-                step=500.0,
-                min_value=0.0,
-                help="Amount you contribute to your spouse's RRSP. Counts against YOUR contribution room. You receive the tax refund."
-            )
-            
-            spouse_rrsp_balance_start = st.number_input(
-                "Spouse RRSP Balance (Start of Year)",
-                value=float(year_data.get("spouse_rrsp_balance_start", 0)),
-                step=1000.0,
-                min_value=0.0,
-                help="Your spouse's total RRSP value on January 1st. Used for household portfolio tracking."
-            )
-            
-            spouse_gross_income = st.number_input(
-                "Spouse Gross Income (optional)",
-                value=float(year_data.get("spouse_gross_income", 0)),
-                step=5000.0,
-                min_value=0.0,
-                help="💡 Used to warn if spousal RRSP income splitting may not be beneficial. Leave 0 to skip."
-            )
-            
-            spouse_age = st.number_input(
-                "Spouse Age (optional)",
-                value=int(year_data.get("spouse_age", 0)),
-                step=1,
-                min_value=0,
-                max_value=100,
-                help="Used to warn if spouse is 71+ (CRA prohibits contributions to their RRSP after Dec 31 of their 71st year)"
-            )
-            
-            # Real-time spousal RRSP warnings in sidebar
-            if spousal_rrsp_contribution > 0:
-                if spouse_age >= 71:
-                    st.error(f"🚨 CRA Rule: Cannot contribute to spouse's RRSP after Dec 31 of the year they turn 71!")
-                elif spouse_gross_income > 0 and spouse_gross_income > year_data.get('t4_gross_income', 0):
-                    st.warning(f"⚠️ Your spouse earns more than you. Spousal RRSP withdrawals may be taxed at a higher rate — income splitting benefit may not apply.")
-                else:
-                    st.success(f"✅ Spousal RRSP: ${spousal_rrsp_contribution:,.0f} to {spouse_name if spouse_name else 'spouse'}'s RRSP")
-            
-            # Show how spousal contribution is counted
-            if spousal_rrsp_contribution > 0:
-                rrsp_lump_sums_so_far = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
-                biweekly_total = base_salary * (biweekly_pct / 100) + base_salary * (min(biweekly_pct, employer_match_cap) / 100)
-                total_so_far = biweekly_total + rrsp_lump_sums_so_far + spousal_rrsp_contribution
-                st.caption(f"📊 Combined room used: ${total_so_far:,.0f} (personal ${total_so_far - spousal_rrsp_contribution:,.0f} + spousal ${spousal_rrsp_contribution:,.0f})")
-            
             st.markdown("### 🌱 TFSA Strategy")
             
             tfsa_lump_sum = st.number_input(
@@ -4055,7 +3993,7 @@ else:
                 help="Tax-free savings account contribution"
             )
             
-            st.markdown("### 📋 CRA Contribution Limits")
+            st.markdown("### 📋 Your CRA Contribution Limits")
             
             # Get default values from previous year if available
             prev_year = str(selected_year - 1)
@@ -4084,109 +4022,65 @@ else:
                 default_tfsa_room = prev_tfsa_room_remaining + new_tfsa_room
             
             rrsp_room = st.number_input(
-                "Your Available RRSP Room",
+                "Your RRSP Room",
                 value=float(year_data.get("rrsp_room", default_rrsp_room)),
                 step=1000.0,
                 min_value=0.0,
-                help="From YOUR latest Notice of Assessment. Both your personal and spousal RRSP contributions draw from this room."
+                help="From YOUR Notice of Assessment. This room can be used for YOUR personal RRSP OR for spousal RRSP contributions."
             )
             
             tfsa_room = st.number_input(
-                "Available TFSA Room",
+                "Your TFSA Room",
                 value=float(year_data.get("tfsa_room", default_tfsa_room)),
                 step=1000.0,
                 min_value=0.0,
                 help="From CRA MyAccount (auto-filled from previous year if available)"
             )
             
-            # Spouse RRSP room — informational only, does NOT affect calculations
-            spouse_rrsp_room = st.number_input(
-                f"{'Spouse' if not year_data.get('spouse_name') else year_data.get('spouse_name')}'s RRSP Room (optional)",
-                value=float(year_data.get("spouse_rrsp_room", 0)),
-                step=1000.0,
-                min_value=0.0,
-                help=(
-                    "From your SPOUSE'S Notice of Assessment. "
-                    "ℹ️ This does NOT affect your calculations — your spousal RRSP contributions "
-                    "use YOUR room, not theirs. This field is for your household records only."
-                )
-            )
-            
             if prev_year in all_history and default_rrsp_room > 0:
-                st.caption(f"ℹ️ Your room auto-calculated from {prev_year} carryover + new room")
+                st.caption(f"ℹ️ Auto-calculated from {prev_year} carryover + new room")
             
-            # ── LIVE ROOM USAGE SUMMARY ─────────────────────────────────────
-            # Calculate current totals from form inputs already entered above
-            _biweekly_total = (
-                base_salary * (biweekly_pct / 100) +
-                base_salary * (min(biweekly_pct, employer_match_cap) / 100)
-            )
-            _personal_lump = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
-            _personal_total = _biweekly_total + _personal_lump
-            _total_used = _personal_total + spousal_rrsp_contribution
-            _remaining = rrsp_room - _total_used
-            _over = max(0, -_remaining)
-            
+            # Show YOUR personal RRSP room usage (before spousal)
             if rrsp_room > 0:
-                st.markdown("**📊 Your RRSP Room Usage Summary**")
+                _biweekly_total = (
+                    base_salary * (biweekly_pct / 100) +
+                    base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+                )
+                _personal_lump = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
+                _personal_rrsp_only = _biweekly_total + _personal_lump
+                _personal_remaining = rrsp_room - _personal_rrsp_only
                 
-                col_r1, col_r2 = st.columns(2)
-                with col_r1:
-                    st.metric("Your Total Room", f"${rrsp_room:,.0f}",
-                              help="From your NOA — covers both personal and spousal contributions")
-                    st.metric("Personal RRSP Used", f"${_personal_total:,.0f}",
-                              help="Paycheck contributions + employer match + lump sums")
-                with col_r2:
+                st.markdown("**Your Personal RRSP Room Usage**")
+                col_yr1, col_yr2 = st.columns(2)
+                with col_yr1:
                     st.metric(
-                        "Spousal RRSP Used",
-                        f"${spousal_rrsp_contribution:,.0f}",
-                        help="Counts against YOUR room (CRA rule)"
+                        "Your RRSP Room",
+                        f"${rrsp_room:,.0f}",
+                        help="Total RRSP contribution room from your NOA"
                     )
-                    if _over > 0:
-                        st.metric("⚠️ Over-Contribution", f"${_over:,.0f}",
-                                  delta=f"CRA penalty ~${max(0,_over-2000)*0.01:,.0f}/mo",
-                                  delta_color="inverse",
-                                  help="Amount exceeding your room. CRA charges 1%/month on amounts over $2,000 buffer.")
-                    else:
-                        st.metric("Room Remaining", f"${max(0,_remaining):,.0f}",
-                                  delta=f"{max(0,_remaining/rrsp_room*100):.1f}% available" if rrsp_room > 0 else None,
-                                  help="Remaining room after personal + spousal contributions")
-                
-                # Visual split bar
-                if _total_used > 0:
-                    _p_pct = min(100, _personal_total / rrsp_room * 100)
-                    _s_pct = min(100 - _p_pct, spousal_rrsp_contribution / rrsp_room * 100)
-                    _rem_pct = max(0, 100 - _p_pct - _s_pct)
-                    _bar_color = "#ef4444" if _over > 0 else "#3b82f6"
-                    st.markdown(f"""
-                        <div style="background:#e2e8f0; border-radius:6px; overflow:hidden; height:22px; display:flex; margin-top:4px;">
-                            <div style="background:{_bar_color}; width:{_p_pct:.1f}%; display:flex; align-items:center;
-                                 justify-content:center; color:white; font-size:0.75em; font-weight:600; padding:0 3px; white-space:nowrap;">
-                                {f"You {_p_pct:.0f}%" if _p_pct > 10 else ""}
-                            </div>
-                            <div style="background:#8b5cf6; width:{_s_pct:.1f}%; display:flex; align-items:center;
-                                 justify-content:center; color:white; font-size:0.75em; font-weight:600; padding:0 3px; white-space:nowrap;">
-                                {f"Spouse {_s_pct:.0f}%" if _s_pct > 10 else ""}
-                            </div>
-                            <div style="background:#e2e8f0; width:{_rem_pct:.1f}%; display:flex; align-items:center;
-                                 justify-content:center; color:#94a3b8; font-size:0.75em; padding:0 3px;">
-                                {f"Free {_rem_pct:.0f}%" if _rem_pct > 10 else ""}
-                            </div>
-                        </div>
-                        <div style="font-size:0.78em; color:#64748b; margin-top:4px;">
-                            🔵 Personal: ${_personal_total:,.0f} &nbsp;|&nbsp;
-                            🟣 Spousal: ${spousal_rrsp_contribution:,.0f} &nbsp;|&nbsp;
-                            {'🔴 OVER: $' + f'{_over:,.0f}' if _over > 0 else '⬜ Available: $' + f'{max(0,_remaining):,.0f}'}
-                        </div>
-                    """, unsafe_allow_html=True)
-                
-                # Spouse's own room — informational note
-                if spouse_rrsp_room > 0:
-                    _spouse_label = year_data.get('spouse_name', 'Spouse') or 'Spouse'
-                    st.info(
-                        f"ℹ️ **{_spouse_label}'s own RRSP room: ${spouse_rrsp_room:,.0f}** — "
-                        f"for reference only. Their room is used if THEY contribute to their own RRSP independently."
+                with col_yr2:
+                    st.metric(
+                        "Personal RRSP Used",
+                        f"${_personal_rrsp_only:,.0f}",
+                        delta=f"${max(0,_personal_remaining):,.0f} remaining" if _personal_remaining >= 0 else f"${abs(_personal_remaining):,.0f} OVER",
+                        delta_color="normal" if _personal_remaining >= 0 else "inverse",
+                        help="Your paycheck + employer match + lump sum RRSP contributions"
                     )
+                
+                # Simple progress bar for personal RRSP only
+                _personal_pct = min(100, (_personal_rrsp_only / rrsp_room * 100))
+                _bar_color = "#ef4444" if _personal_remaining < 0 else "#3b82f6"
+                st.markdown(f"""
+                    <div style="background:#e2e8f0; border-radius:6px; overflow:hidden; height:20px; margin-top:8px;">
+                        <div style="background:{_bar_color}; width:{_personal_pct:.1f}%; height:100%; display:flex; 
+                             align-items:center; justify-content:center; color:white; font-size:0.75em; font-weight:600;">
+                            {f"{_personal_pct:.0f}%" if _personal_pct > 8 else ""}
+                        </div>
+                    </div>
+                    <div style="font-size:0.78em; color:#64748b; margin-top:4px;">
+                        {f"✅ {100-_personal_pct:.0f}% room available" if _personal_remaining >= 0 else f"⚠️ Over-contribution: ${abs(_personal_remaining):,.0f}"}
+                    </div>
+                """, unsafe_allow_html=True)
             
             st.markdown("### 📈 Portfolio Tracking")
             
@@ -4243,6 +4137,159 @@ else:
             )
             
             st.caption(f"📊 Using {target_cagr}% CAGR for growth projections")
+            
+            # ══════════════════════════════════════════════════════════════════
+            # SPOUSE'S RRSP SECTION - Separate, Optional, Collapsible
+            # ══════════════════════════════════════════════════════════════════
+            st.markdown("### 👫 Spouse's RRSP (Optional)")
+            st.caption("Skip this section if you're single or don't plan to use spousal RRSP")
+            
+            with st.expander("⚙️ Configure Spouse's RRSP Information", expanded=bool(year_data.get("spousal_rrsp_contribution", 0) > 0 or year_data.get("spouse_name"))):
+                st.markdown("**About Spousal RRSP:**")
+                st.info("""
+                    - You contribute to your SPOUSE's RRSP
+                    - Uses YOUR contribution room (not theirs)
+                    - YOU receive the tax refund
+                    - THEY own the account & withdraw in retirement
+                    - Withdrawals taxed at THEIR (lower) rate = income splitting benefit
+                """)
+                
+                spouse_name = st.text_input(
+                    "Spouse Name",
+                    value=year_data.get("spouse_name", ""),
+                    placeholder="e.g. Jane",
+                    help="Used for display purposes throughout the app"
+                )
+                
+                # ── SPOUSE'S NOA Information (Informational Only) ──
+                st.markdown("**Spouse's CRA Information (from their NOA)**")
+                
+                col_sp1, col_sp2 = st.columns(2)
+                
+                with col_sp1:
+                    spouse_rrsp_room = st.number_input(
+                        f"{spouse_name if spouse_name else 'Spouse'}'s RRSP Room",
+                        value=float(year_data.get("spouse_rrsp_room", 0)),
+                        step=1000.0,
+                        min_value=0.0,
+                        help=(
+                            "From your SPOUSE'S Notice of Assessment. "
+                            "This is for household records only — it does NOT affect YOUR calculations. "
+                            "Spousal RRSP contributions use YOUR room, not theirs."
+                        )
+                    )
+                
+                with col_sp2:
+                    spouse_gross_income = st.number_input(
+                        f"{spouse_name if spouse_name else 'Spouse'}'s Gross Income",
+                        value=float(year_data.get("spouse_gross_income", 0)),
+                        step=5000.0,
+                        min_value=0.0,
+                        help="Used to warn if they're in a higher tax bracket than you (which reduces income splitting benefit)"
+                    )
+                
+                spouse_age = st.number_input(
+                    f"{spouse_name if spouse_name else 'Spouse'}'s Age",
+                    value=int(year_data.get("spouse_age", 0)),
+                    step=1,
+                    min_value=0,
+                    max_value=100,
+                    help="CRA prohibits spousal RRSP contributions after Dec 31 of the year your spouse turns 71"
+                )
+                
+                st.divider()
+                
+                # ── SPOUSAL RRSP CONTRIBUTION (Uses YOUR Room) ──
+                st.markdown(f"**Spousal RRSP Contribution (uses YOUR ${rrsp_room:,.0f} room)**")
+                
+                spousal_rrsp_contribution = st.number_input(
+                    f"Amount to {spouse_name if spouse_name else 'Spouse'}'s RRSP",
+                    value=float(year_data.get("spousal_rrsp_contribution", 0)),
+                    step=500.0,
+                    min_value=0.0,
+                    help=(
+                        "⚠️ CRITICAL: This uses YOUR RRSP room, not theirs. "
+                        "It counts toward the same limit as your personal RRSP contributions."
+                    )
+                )
+                
+                spouse_rrsp_balance_start = st.number_input(
+                    f"{spouse_name if spouse_name else 'Spouse'}'s RRSP Balance (Start of Year)",
+                    value=float(year_data.get("spouse_rrsp_balance_start", 0)),
+                    step=1000.0,
+                    min_value=0.0,
+                    help="Their total RRSP balance on January 1st (for household portfolio tracking)"
+                )
+                
+                # ── REAL-TIME COMBINED ROOM CHECK ──
+                if spousal_rrsp_contribution > 0:
+                    st.divider()
+                    st.markdown("**Combined Room Usage Check**")
+                    
+                    _biweekly = (
+                        base_salary * (biweekly_pct / 100) +
+                        base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+                    )
+                    _lump = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
+                    _personal = _biweekly + _lump
+                    _total_both = _personal + spousal_rrsp_contribution
+                    _remaining_after_both = rrsp_room - _total_both
+                    _over_both = max(0, -_remaining_after_both)
+                    
+                    col_check1, col_check2, col_check3 = st.columns(3)
+                    
+                    with col_check1:
+                        st.metric("Your Room", f"${rrsp_room:,.0f}")
+                    with col_check2:
+                        st.metric("Personal RRSP", f"${_personal:,.0f}")
+                        st.metric("Spousal RRSP", f"${spousal_rrsp_contribution:,.0f}")
+                    with col_check3:
+                        if _over_both > 0:
+                            st.metric("⚠️ OVER-CONTRIBUTION", f"${_over_both:,.0f}",
+                                      delta=f"~${max(0,_over_both-2000)*0.01:,.0f}/mo penalty",
+                                      delta_color="inverse",
+                                      help="CRA charges 1%/month on amounts over $2,000 buffer")
+                        else:
+                            st.metric("Remaining Room", f"${max(0,_remaining_after_both):,.0f}",
+                                      delta=f"{max(0,_remaining_after_both/rrsp_room*100):.1f}% left",
+                                      help="Room remaining after personal + spousal contributions")
+                    
+                    # Combined visual split bar
+                    if _total_both > 0:
+                        _p_pct = min(100, _personal / rrsp_room * 100)
+                        _s_pct = min(100 - _p_pct, spousal_rrsp_contribution / rrsp_room * 100)
+                        _rem_pct = max(0, 100 - _p_pct - _s_pct)
+                        _color = "#ef4444" if _over_both > 0 else "#3b82f6"
+                        
+                        st.markdown(f"""
+                            <div style="background:#e2e8f0; border-radius:6px; overflow:hidden; height:24px; display:flex; margin:12px 0 4px 0;">
+                                <div style="background:{_color}; width:{_p_pct:.1f}%; display:flex; align-items:center;
+                                     justify-content:center; color:white; font-size:0.75em; font-weight:600; padding:0 4px;">
+                                    {f"Personal {_p_pct:.0f}%" if _p_pct > 10 else ""}
+                                </div>
+                                <div style="background:#8b5cf6; width:{_s_pct:.1f}%; display:flex; align-items:center;
+                                     justify-content:center; color:white; font-size:0.75em; font-weight:600; padding:0 4px;">
+                                    {f"Spousal {_s_pct:.0f}%" if _s_pct > 10 else ""}
+                                </div>
+                                <div style="background:#e2e8f0; width:{_rem_pct:.1f}%; display:flex; align-items:center;
+                                     justify-content:center; color:#94a3b8; font-size:0.75em; padding:0 4px;">
+                                    {f"Free {_rem_pct:.0f}%" if _rem_pct > 10 else ""}
+                                </div>
+                            </div>
+                            <div style="font-size:0.78em; color:#64748b;">
+                                🔵 Personal: ${_personal:,.0f} &nbsp;|&nbsp;
+                                🟣 Spousal: ${spousal_rrsp_contribution:,.0f} &nbsp;|&nbsp;
+                                {'🔴 OVER: $' + f'{_over_both:,.0f}' if _over_both > 0 else '⬜ Available: $' + f'{max(0,_remaining_after_both):,.0f}'}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # Warnings
+                    if spouse_age >= 71:
+                        st.error(f"🚨 **CRA Rule Violation:** Cannot contribute to {spouse_name if spouse_name else 'spouse'}'s RRSP after Dec 31 of the year they turn 71!")
+                    elif spouse_gross_income > 0 and spouse_gross_income > t4_gross_income:
+                        st.warning(f"⚠️ **Income Splitting May Not Apply:** {spouse_name if spouse_name else 'Spouse'} earns more than you — withdrawals may be taxed at a higher rate.")
+                    elif spousal_rrsp_contribution > 0:
+                        st.success(f"✅ Spousal RRSP: ${spousal_rrsp_contribution:,.0f} → {spouse_name if spouse_name else 'spouse'}'s account (you get the refund)")
             
             st.divider()
             
