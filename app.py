@@ -70,6 +70,57 @@ APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.5.0 - Spousal RRSP Phase 1 (Feb 17, 2026)
+
+### ✨ NEW FEATURES:
+
+**👫 Spousal RRSP Support:**
+- Track spousal RRSP contributions separately from personal RRSP
+- Contributions count against YOUR room (CRA compliant)
+- Tax refund calculated on combined personal + spousal amounts
+- Separate portfolio tracking for personal and spouse RRSPs
+- Household portfolio view (personal RRSP + spousal RRSP + TFSA)
+
+**🚨 Smart Validation & Warnings:**
+- Pre-save validation blocks over-contribution BEFORE saving
+- Intelligent suggestions for using spousal RRSP when room is exceeded
+- 3-Year Attribution Rule tracking and warnings
+- Age-71 CRA contribution block enforcement
+- High-income spouse bracket warning
+- Over-contribution detection with CRA penalty estimate ($X/month)
+
+**📊 Enhanced CRA Limits Section:**
+- Separate "Your Limits" vs "Spouse's RRSP" sections for clarity
+- Personal RRSP room usage bar (shows YOUR contributions only)
+- Combined room usage check in spouse section (personal + spousal)
+- Visual split bar: Personal % | Spousal % | Available %
+- Spouse's own RRSP room field (informational, for household records)
+
+**💡 Improved Pending Items:**
+- Smart split recommendations when RRSP room is insufficient
+- Prioritizes spousal RRSP with exact dollar amounts
+- Clear action steps: "Add $X to personal, $Y to spousal"
+- Avoids generic suggestions, provides specific solutions
+
+### 🐛 BUG FIXES:
+- Fixed: TFSA progress bar now shows current year (2026) instead of latest planned year
+- Fixed: Progress bars display correct contribution data
+- Fixed: spouse_rrsp_room field now saves correctly
+
+### 🎨 UI/UX IMPROVEMENTS:
+- Collapsible "Spouse's RRSP (Optional)" section
+- Singles/non-spousal users can skip the section entirely
+- Professional sidebar branding with app name and version info
+- Admin role badge display
+
+### 📋 PHASE 2 FEATURES (Deferred):
+- Income splitting benefit calculator
+- Smart contribution splitter (optimal personal vs spousal allocation)
+- Household combined view toggle
+- Retirement income projections
+
+---
+
 ## 🎉 Version 6.4.2 - Status Consistency Fix (Feb 17, 2026)
 
 ### 🐛 BUG FIXES:
@@ -3914,6 +3965,47 @@ else:
         if st.button("⬅️ Back to Home", use_container_width=True):
             st.session_state.current_page = "Home"
             st.rerun()
+        
+        # ═══════════════════════════════════════════════════════════════
+        # APP BRANDING & VERSION INFO
+        # ═══════════════════════════════════════════════════════════════
+        st.markdown("")
+        
+        # User role badge
+        user_role = st.session_state.get('role', 'USER')
+        if user_role == 'ADMIN':
+            st.markdown("""
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                     padding: 10px 16px; border-radius: 8px; text-align: center; margin-bottom: 16px;">
+                    <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # App branding
+        st.markdown(f"""
+            <div style="text-align: center; margin: 20px 0;">
+                <h3 style="margin: 0; color: #1e293b; font-size: 1.1em; font-weight: 600;">
+                    📊 {APP_NAME}
+                </h3>
+                <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.8em;">
+                    {APP_SUBTITLE}
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Version Info - Collapsible
+        with st.expander("ℹ️ Version Info", expanded=False):
+            st.markdown(f"""
+                **Version:** {APP_VERSION.split(' - ')[0]}  
+                **Released:** {APP_DATE}  
+                **Build:** {APP_VERSION.split(' - ')[1] if ' - ' in APP_VERSION else 'Production'}
+            """)
+            
+            if st.button("📋 View Changelog", use_container_width=True, key="sidebar_changelog"):
+                st.session_state.current_page = "Version Info"
+                st.rerun()
+        
+        st.markdown("---")
         
         st.header(f"⚙️ {selected_year} Parameters")
         
