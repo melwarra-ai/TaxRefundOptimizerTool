@@ -43,19 +43,33 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.4.1 - POWER ADMIN & NOTIFICATIONS (Bug Fix)"
-APP_DATE = "February 15, 2026"
+APP_VERSION = "6.4.2 - POWER ADMIN & NOTIFICATIONS (Status Fix)"
+APP_DATE = "February 17, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.4.2 - Status Consistency Fix (Feb 17, 2026)
+
+### 🐛 BUG FIXES:
+- Fixed: New years with zero income no longer show as "Optimized" (green)
+- Fixed: Year tiles now show "Empty" (gray) when no income is entered
+- Fixed: All status displays (tile, year view, quick stats) now use identical logic
+- Added: has_year_data() helper for clean income check
+- Fixed: Quick Stats only counts years with actual income data
+
+### 📊 Status Logic Now Consistent:
+- ⚪ Empty = No income entered (zero data)
+- 🟠 In Progress = Has income but above $181,440 threshold
+- 🟢 Optimized = Has income AND below $181,440 threshold
+
+---
+
 ## 🎉 Version 6.4.1 - Bug Fix (Feb 15, 2026)
 
 ### 🐛 BUG FIXES:
-- Fixed: "Add Year" button now works correctly
-- Fixed: save_year_data() missing user_id parameter
-- All year management functions now working properly
+- Fixed: "Add Year" button TypeError (missing user_id parameter)
 
 ---
 
@@ -1065,15 +1079,41 @@ def get_rrsp_deadline(tax_year):
     return deadline_date, formatted_date + weekend_note, days_until
 
 def is_year_optimized(year_data):
+    """
+    Returns True ONLY if:
+    1. Year has actual income data entered (t4_gross > 0 or other_income > 0)
+    2. Contribution rooms are set (rrsp_room > 0 and tfsa_room > 0)
+    3. Taxable income is below the Penthouse threshold ($181,440)
+    
+    A year with all zeros is 'Empty', not 'Optimized'.
+    This matches the same logic used in the Year View status card.
+    """
+    if not year_data:
+        return False
+    
+    t4_gross = year_data.get('t4_gross_income', 0)
+    other_inc = year_data.get('other_income', 0)
+    total_gross = t4_gross + other_inc
+    rrsp_room = year_data.get('rrsp_room', 0)
+    tfsa_room = year_data.get('tfsa_room', 0)
+    
+    # Must have income AND contribution rooms set — otherwise it's just "Empty"
+    planning_complete = (total_gross > 0) and (rrsp_room > 0) and (tfsa_room > 0)
+    if not planning_complete:
+        return False
+    
+    total_rrsp = calculate_annual_rrsp(year_data)
+    taxable_income = max(0, total_gross - total_rrsp)
+    return taxable_income <= 181440
+
+
+def has_year_data(year_data):
+    """Returns True if the year has any meaningful data entered (income > 0)"""
     if not year_data:
         return False
     t4_gross = year_data.get('t4_gross_income', 0)
     other_inc = year_data.get('other_income', 0)
-    total_gross = t4_gross + other_inc
-    total_rrsp = calculate_annual_rrsp(year_data)
-    taxable_income = max(0, total_gross - total_rrsp)
-    penthouse_threshold = 181440
-    return taxable_income <= penthouse_threshold
+    return (t4_gross + other_inc) > 0
 
 # ============================================================================
 # LOGIN/REGISTER PAGE
@@ -2547,7 +2587,7 @@ if st.session_state.current_page == "Home":
         quick_total_rrsp = 0
         quick_total_tfsa = 0
         quick_total_tax_saved = 0
-        quick_total_years = len(all_history)
+        quick_total_years = 0      # Only count years with actual data
         quick_optimized_years = 0
         
         for yr, data in all_history.items():
@@ -2564,10 +2604,12 @@ if st.session_state.current_page == "Home":
             refund = calculate_tax_refund(total_gross, annual_rrsp)
             quick_total_tax_saved += refund
             
-            # Check if optimized
-            taxable = total_gross - annual_rrsp
-            if taxable < 181440:
-                quick_optimized_years += 1
+            # Only count years with real income data
+            if total_gross > 0:
+                quick_total_years += 1
+                # Use same consistent logic as is_year_optimized()
+                if is_year_optimized(data):
+                    quick_optimized_years += 1
         
         quick_total_contrib = quick_total_rrsp + quick_total_tfsa
         quick_opt_rate = (quick_optimized_years / quick_total_years * 100) if quick_total_years > 0 else 0
@@ -3353,27 +3395,33 @@ if st.session_state.current_page == "Home":
         for i, yr in enumerate(years_to_show[row_start:row_start + cols_per_row]):
             with cols[i]:
                 is_saved = str(yr) in all_history
-                is_optimized = is_year_optimized(all_history.get(str(yr), {})) if is_saved else False
+                year_data_entry = all_history.get(str(yr), {})
                 
-                # Determine status and styling
-                if not is_saved:
-                    # Gray/Slate - Empty
+                # Use consistent status logic:
+                # - Not saved       → gray "Empty" (never created)
+                # - Saved, no income → gray "Empty" (created but no data)
+                # - Saved, has income, above threshold → orange "In Progress"
+                # - Saved, has income, below threshold → green "Optimized"
+                
+                is_optimized = is_year_optimized(year_data_entry) if is_saved else False
+                has_data = has_year_data(year_data_entry) if is_saved else False
+                
+                if not is_saved or not has_data:
+                    # Gray - Empty (not started or saved with zero income)
                     status_emoji = "⚪"
                     status_text = "Empty"
                     button_label = f"📅 **{yr}**\n{status_emoji} {status_text}"
                     container_style = "background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border: 2px solid #94a3b8; border-radius: 12px; padding: 4px;"
                 elif is_optimized:
                     # Green - Optimized
-                    data = all_history[str(yr)]
-                    annual_rrsp = calculate_annual_rrsp(data)
+                    annual_rrsp = calculate_annual_rrsp(year_data_entry)
                     status_emoji = "🟢"
                     status_text = f"${annual_rrsp:,.0f}"
                     button_label = f"📅 **{yr}**\n{status_text}\n{status_emoji} Optimized"
                     container_style = "background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border: 2px solid #10b981; border-radius: 12px; padding: 4px;"
                 else:
                     # Orange - In Progress
-                    data = all_history[str(yr)]
-                    annual_rrsp = calculate_annual_rrsp(data)
+                    annual_rrsp = calculate_annual_rrsp(year_data_entry)
                     status_emoji = "🟠"
                     status_text = f"${annual_rrsp:,.0f}"
                     button_label = f"📅 **{yr}**\n{status_text}\n{status_emoji} In Progress"
