@@ -4748,8 +4748,27 @@ else:
         
         # Item 1: RRSP contribution needed
         if deficit > 0:
-            # Check if user has enough room for the full amount
-            if deficit <= remaining_rrsp_room:
+            # Check if user has ANY room left
+            if remaining_rrsp_room <= 0:
+                # NO ROOM LEFT - Cannot add more RRSP (personal OR spousal)
+                pending_items.append({
+                    "item": "⚠️ RRSP Room Fully Used — Cannot Optimize Further",
+                    "current": f"${total_rrsp_contributions:,.0f} (all ${rrsp_room:,.0f} room used)",
+                    "target": f"${total_rrsp_contributions + deficit:,.0f} (would need ${deficit:,.0f} more)",
+                    "action": (
+                        f"🚫 **You've used all your ${rrsp_room:,.0f} RRSP room for {selected_year}.** "
+                        f"You need ${deficit:,.0f} more to avoid the Penthouse bracket, but **no room remains**. "
+                        f"\n\n"
+                        f"**Your options:**\n"
+                        f"1. ✅ **Verify NOA room** — Double-check your Notice of Assessment. If your actual room is higher, update the 'Your RRSP Room' field.\n"
+                        f"2. ⚠️ **Accept partial optimization** — Stay in Penthouse this year, optimize fully next year when you get new room.\n"
+                        f"3. 📅 **Plan ahead for next year** — You'll get ~${min(31560, total_gross_income * 0.18):,.0f} new room in {selected_year + 1} based on {selected_year} income.\n"
+                        f"4. 🔄 **Reduce other income** — If possible, defer bonuses or other income to next year.\n\n"
+                        f"💡 **Remember:** Spousal RRSP uses YOUR room too, so adding to spousal won't help when your room is at $0."
+                    ),
+                    "impact": f"Cannot achieve GREEN status this year without additional room"
+                })
+            elif deficit <= remaining_rrsp_room:
                 # Sufficient room - straightforward suggestion
                 pending_items.append({
                     "item": "Increase RRSP Contributions",
@@ -4759,27 +4778,22 @@ else:
                     "impact": f"Saves ${deficit * 0.4797:,.0f} in taxes at 47.97% Penthouse rate"
                 })
             else:
-                # Insufficient room - suggest split approach with spousal RRSP
-                room_portion = remaining_rrsp_room
-                spousal_portion = deficit - remaining_rrsp_room
-                
+                # Some room left, but not enough - suggest using ALL remaining room
                 pending_items.append({
-                    "item": "Increase RRSP Contributions",
+                    "item": "Increase RRSP Contributions (Partial Optimization)",
                     "current": f"${total_rrsp_contributions:,.0f}",
-                    "target": f"${total_rrsp_contributions + deficit:,.0f}",
-                    "action": f"⚠️ You need ${deficit:,.0f} but only have ${remaining_rrsp_room:,.0f} room available. **Recommended split:** (1) Add ${room_portion:,.0f} to your personal RRSP lump sums, (2) Add ${spousal_portion:,.0f} to **Spousal RRSP** in the '👫 Spouse's RRSP (Optional)' section below. This uses your ${rrsp_room:,.0f} room efficiently and avoids CRA penalties.",
-                    "impact": f"Saves ${deficit * 0.4797:,.0f} in taxes at 47.97% Penthouse rate"
+                    "target": f"${total_rrsp_contributions + remaining_rrsp_room:,.0f} (using all available room)",
+                    "action": (
+                        f"⚠️ You need ${deficit:,.0f} to fully optimize, but only have ${remaining_rrsp_room:,.0f} room remaining. "
+                        f"\n\n**Recommended action:** Add your remaining ${remaining_rrsp_room:,.0f} room to RRSP (personal OR spousal) to partially optimize. "
+                        f"This will save ${remaining_rrsp_room * 0.4797:,.0f} in taxes. "
+                        f"\n\nYou'll still have ${deficit - remaining_rrsp_room:,.0f} in Penthouse exposure, but it's better than ${deficit:,.0f}. "
+                        f"Next year ({selected_year + 1}), you'll get ~${min(31560, total_gross_income * 0.18):,.0f} new room to continue optimizing."
+                    ),
+                    "impact": f"Partial optimization: saves ${remaining_rrsp_room * 0.4797:,.0f} now, full optimization requires ${(deficit - remaining_rrsp_room) * 0.4797:,.0f} more savings next year"
                 })
         
-        # Item 2: Room availability check - ONLY show if insufficient AND spousal not suggested above
-        if deficit > remaining_rrsp_room and deficit == 0:
-            pending_items.append({
-                "item": "⚠️ Insufficient RRSP Room",
-                "current": f"${remaining_rrsp_room:,.0f} available",
-                "target": f"${deficit:,.0f} needed",
-                "action": f"You need ${deficit - remaining_rrsp_room:,.0f} more RRSP room than available. Consider: (1) Verify your NOA room is correct, (2) Use spousal RRSP if married, (3) Accept partial optimization this year",
-                "impact": "May not achieve full green status this year"
-            })
+        # Item 2: Room availability check - REMOVED (now handled above)
         
         if pending_items:
             for idx, item in enumerate(pending_items, 1):
