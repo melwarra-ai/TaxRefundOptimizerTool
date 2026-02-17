@@ -2756,20 +2756,23 @@ if st.session_state.current_page == "Home":
         st.markdown("")
         
         # ===================================================================
-        # CONTRIBUTION PROGRESS BARS - NEW FEATURE
+        # CONTRIBUTION PROGRESS BARS - Shows CURRENT YEAR (2026)
         # ===================================================================
         
         st.markdown("### 📊 Contribution Room Utilization")
-        st.caption("Visual overview of your current year contribution space usage")
+        st.caption(f"Visual overview of your {datetime.now().year} contribution space usage")
         st.markdown("")
         
-        # Get latest year for progress bars
-        if latest:
-            rrsp_room = latest.get('rrsp_room', 0)
-            tfsa_room = latest.get('tfsa_room', 0)
+        # Get CURRENT YEAR data (2026) for progress bars
+        current_year = str(datetime.now().year)
+        current_year_data = all_history.get(current_year, None)
+        
+        if current_year_data:
+            rrsp_room = current_year_data.get('rrsp_room', 0)
+            tfsa_room = current_year_data.get('tfsa_room', 0)
             
-            rrsp_used = latest_rrsp_contrib
-            tfsa_used = latest_tfsa_contrib
+            rrsp_used = calculate_annual_rrsp(current_year_data)
+            tfsa_used = current_year_data.get('tfsa_lump_sum', 0)
             
             rrsp_remaining = max(0, rrsp_room - rrsp_used)
             tfsa_remaining = max(0, tfsa_room - tfsa_used)
@@ -2846,6 +2849,16 @@ if st.session_state.current_page == "Home":
                     delta=f"${tfsa_remaining:,.0f} left",
                     delta_color="inverse" if tfsa_pct < 80 else "normal"
                 )
+            
+            # Show which year is displayed
+            st.caption(f"💡 Showing {current_year} contribution data. [Click any year below to view/edit that year's plan]")
+        else:
+            # Current year not found — show message
+            st.info(f"""
+                📅 **No data for {current_year} yet.**
+                
+                Click "➕ Add Year" below to create a {current_year} tax plan, or select an existing year to view its progress.
+            """)
         
         st.divider()
     
