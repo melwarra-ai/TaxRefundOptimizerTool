@@ -63,13 +63,73 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.5.3 - UI/UX Polish"
+APP_VERSION = "6.5.4 - Sidebar Redesign"
 APP_DATE = "February 17, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.5.4 - Sidebar Redesign (Feb 17, 2026)
+
+### 🎨 MAJOR UI REDESIGN:
+
+**Complete Sidebar Overhaul - Following Professional Portfolio Optimizer Design:**
+
+**New Sidebar Layout:**
+1. **Admin Badge** (if admin) - Orange gradient pill badge at top
+2. **Username** - "@username" format in gray below badge
+3. **Divider** - Clean separator line
+4. **App Branding** - Name + subtitle with version
+5. **Version Info Expander** - Collapsible, shows version details inline
+6. **Navigation Buttons** - Clean, minimal
+
+**Key Changes:**
+- ✅ Removed centered layout, now left-aligned
+- ✅ Admin badge is now a pill-shaped element (not full-width box)
+- ✅ Username shown as "@username" (lowercase, gray)
+- ✅ Version info embedded in sidebar (not separate navigation button)
+- ✅ Collapsible version details with "View Changelog" button
+- ✅ Consistent design across ALL pages (Home, Profile, Version, Year View)
+- ✅ Cleaner spacing and typography
+- ✅ Professional, minimal aesthetic
+
+**Design Philosophy:**
+Matches Portfolio Optimizer's clean, professional sidebar design with:
+- Minimal visual noise
+- Clear information hierarchy
+- Consistent branding placement
+- Inline expandable sections
+- Professional color scheme
+
+**Before (v6.5.3):**
+```
+┌─────────────────────┐
+│   👤 melwarra       │ ← Centered
+│   Role: USER        │
+│   ───────────       │
+│   📊 App Name       │
+│   v6.5.3 • Date    │
+└─────────────────────┘
+```
+
+**After (v6.5.4):**
+```
+⚡ Admin: Administrator  ← Pill badge
+@melwarra               ← Left-aligned
+─────────────────────
+📊 Canadian Tax Optimizer
+Institutional-Grade... v6.5.4
+
+> ℹ️ Version Info      ← Expander
+  Version: 6.5.4
+  Released: Feb 17, 2026
+  Build: Sidebar Redesign
+  [📋 View Changelog]
+```
+
+---
+
 ## 🎉 Version 6.5.3 - UI/UX Polish (Feb 17, 2026)
 
 ### 🎨 UI/UX IMPROVEMENTS:
@@ -2531,25 +2591,45 @@ def show_profile_page():
     """Display user profile"""
     
     with st.sidebar:
-        # User info with app branding (consistent with main sidebar)
+        # Admin badge (if admin)
+        if st.session_state.role == 'admin':
+            st.markdown("""
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                     padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
+                     display: inline-block; width: auto;">
+                    <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Username
+        st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
+                    unsafe_allow_html=True)
+        
+        st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
+        
+        # App branding
         st.markdown(f"""
-            <div style="text-align: center; padding: 12px 0; margin-bottom: 8px;">
-                <div style="font-size: 1.3em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
-                    👤 {st.session_state.username}
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 1.1em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                    📊 {APP_NAME}
                 </div>
-                <div style="font-size: 0.8em; color: #64748b; margin-bottom: 8px;">
-                    Role: {st.session_state.role.upper()}
-                </div>
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 8px;">
-                    <div style="font-size: 0.85em; font-weight: 600; color: #3b82f6;">
-                        📊 {APP_NAME}
-                    </div>
-                    <div style="font-size: 0.75em; color: #94a3b8;">
-                        v{APP_VERSION.split(' - ')[0]} • {APP_DATE.split(',')[0].split()[-1]}, {APP_DATE.split()[-1]}
-                    </div>
+                <div style="font-size: 0.85em; color: #64748b;">
+                    {APP_SUBTITLE} v{APP_VERSION.split(' - ')[0]}
                 </div>
             </div>
         """, unsafe_allow_html=True)
+        
+        # Version Info - Collapsible expander
+        with st.expander("ℹ️ Version Info", expanded=False):
+            st.markdown(f"""
+                **Version:** {APP_VERSION.split(' - ')[0]}  
+                **Released:** {APP_DATE}  
+                **Build:** {APP_VERSION.split(' - ')[1] if ' - ' in APP_VERSION else 'Production'}
+            """)
+            
+            if st.button("📋 View Changelog", use_container_width=True, key="profile_sidebar_changelog"):
+                st.session_state.current_page = "Version"
+                st.rerun()
         
         st.divider()
         
@@ -2632,25 +2712,45 @@ all_history = load_all_data(st.session_state.user_id)
 
 # Sidebar navigation
 with st.sidebar:
-    # User info with app branding
+    # Admin badge (if admin)
+    if st.session_state.role == 'admin':
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                 padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
+                 display: inline-block; width: auto;">
+                <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # Username
+    st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
+                unsafe_allow_html=True)
+    
+    st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
+    
+    # App branding
     st.markdown(f"""
-        <div style="text-align: center; padding: 12px 0; margin-bottom: 8px;">
-            <div style="font-size: 1.3em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
-                👤 {st.session_state.username}
+        <div style="margin-bottom: 20px;">
+            <div style="font-size: 1.1em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                📊 {APP_NAME}
             </div>
-            <div style="font-size: 0.8em; color: #64748b; margin-bottom: 8px;">
-                Role: {st.session_state.role.upper()}
-            </div>
-            <div style="border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 8px;">
-                <div style="font-size: 0.85em; font-weight: 600; color: #3b82f6;">
-                    📊 {APP_NAME}
-                </div>
-                <div style="font-size: 0.75em; color: #94a3b8;">
-                    v{APP_VERSION.split(' - ')[0]} • {APP_DATE.split(',')[0].split()[-1]}, {APP_DATE.split()[-1]}
-                </div>
+            <div style="font-size: 0.85em; color: #64748b;">
+                {APP_SUBTITLE} v{APP_VERSION.split(' - ')[0]}
             </div>
         </div>
     """, unsafe_allow_html=True)
+    
+    # Version Info - Collapsible expander
+    with st.expander("ℹ️ Version Info", expanded=False):
+        st.markdown(f"""
+            **Version:** {APP_VERSION.split(' - ')[0]}  
+            **Released:** {APP_DATE}  
+            **Build:** {APP_VERSION.split(' - ')[1] if ' - ' in APP_VERSION else 'Production'}
+        """)
+        
+        if st.button("📋 View Changelog", use_container_width=True, key="sidebar_changelog"):
+            st.session_state.current_page = "Version"
+            st.rerun()
     
     st.divider()
     
@@ -2662,10 +2762,6 @@ with st.sidebar:
     
     if st.button("👤 Profile Settings", use_container_width=True, key="main_profile_btn"):
         st.session_state.current_page = "Profile"
-        st.rerun()
-    
-    if st.button("ℹ️ Version Info", use_container_width=True, key="main_version_btn"):
-        st.session_state.current_page = "Version"
         st.rerun()
     
     if st.button("🚪 Logout", use_container_width=True, type="secondary", key="main_logout_btn"):
@@ -2697,22 +2793,30 @@ if st.session_state.current_page == "Profile":
 if st.session_state.current_page == "Version":
     # Version Info Page
     with st.sidebar:
-        # User info with app branding (consistent with main sidebar)
+        # Admin badge (if admin)
+        if st.session_state.role == 'admin':
+            st.markdown("""
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                     padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
+                     display: inline-block; width: auto;">
+                    <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Username
+        st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
+                    unsafe_allow_html=True)
+        
+        st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
+        
+        # App branding
         st.markdown(f"""
-            <div style="text-align: center; padding: 12px 0; margin-bottom: 8px;">
-                <div style="font-size: 1.3em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
-                    👤 {st.session_state.username}
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 1.1em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                    📊 {APP_NAME}
                 </div>
-                <div style="font-size: 0.8em; color: #64748b; margin-bottom: 8px;">
-                    Role: {st.session_state.role.upper()}
-                </div>
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 8px;">
-                    <div style="font-size: 0.85em; font-weight: 600; color: #3b82f6;">
-                        📊 {APP_NAME}
-                    </div>
-                    <div style="font-size: 0.75em; color: #94a3b8;">
-                        v{APP_VERSION.split(' - ')[0]} • {APP_DATE.split(',')[0].split()[-1]}, {APP_DATE.split()[-1]}
-                    </div>
+                <div style="font-size: 0.85em; color: #64748b;">
+                    {APP_SUBTITLE} v{APP_VERSION.split(' - ')[0]}
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -4149,34 +4253,37 @@ else:
             st.session_state.current_page = "Home"
             st.rerun()
         
-        # ═══════════════════════════════════════════════════════════════
-        # APP BRANDING & VERSION INFO
-        # ═══════════════════════════════════════════════════════════════
-        st.markdown("")
+        st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
         
-        # User role badge
-        user_role = st.session_state.get('role', 'USER')
-        if user_role == 'ADMIN':
+        # Admin badge (if admin)
+        if st.session_state.role == 'admin':
             st.markdown("""
                 <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
-                     padding: 10px 16px; border-radius: 8px; text-align: center; margin-bottom: 16px;">
+                     padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
+                     display: inline-block; width: auto;">
                     <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
                 </div>
             """, unsafe_allow_html=True)
         
+        # Username
+        st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
+                    unsafe_allow_html=True)
+        
+        st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
+        
         # App branding
         st.markdown(f"""
-            <div style="text-align: center; margin: 20px 0;">
-                <h3 style="margin: 0; color: #1e293b; font-size: 1.1em; font-weight: 600;">
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 1.1em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
                     📊 {APP_NAME}
-                </h3>
-                <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.8em;">
-                    {APP_SUBTITLE}
-                </p>
+                </div>
+                <div style="font-size: 0.85em; color: #64748b;">
+                    {APP_SUBTITLE} v{APP_VERSION.split(' - ')[0]}
+                </div>
             </div>
         """, unsafe_allow_html=True)
         
-        # Version Info - Collapsible
+        # Version Info - Collapsible expander
         with st.expander("ℹ️ Version Info", expanded=False):
             st.markdown(f"""
                 **Version:** {APP_VERSION.split(' - ')[0]}  
@@ -4184,8 +4291,8 @@ else:
                 **Build:** {APP_VERSION.split(' - ')[1] if ' - ' in APP_VERSION else 'Production'}
             """)
             
-            if st.button("📋 View Changelog", use_container_width=True, key="sidebar_changelog"):
-                st.session_state.current_page = "Version Info"
+            if st.button("📋 View Changelog", use_container_width=True, key="year_sidebar_changelog"):
+                st.session_state.current_page = "Version"
                 st.rerun()
         
         st.markdown("---")
