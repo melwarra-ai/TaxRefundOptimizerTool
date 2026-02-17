@@ -43,7 +43,7 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.4.2 - POWER ADMIN & NOTIFICATIONS (Status Fix)"
+APP_VERSION = "6.4.3 - Login Width Fix"
 APP_DATE = "February 17, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
@@ -1130,100 +1130,134 @@ def show_auth_page():
         )
         
         if admin_check and admin_check[0]['count'] == 0:
-            # 'admin' user doesn't exist - create it now
             admin_password = "admin123"
             password_hash, salt = hash_password(admin_password)
-            
             execute_query("""
                 INSERT INTO users (username, email, password_hash, salt, role, is_active, created_at)
                 VALUES (%s, %s, %s, %s, 'admin', TRUE, %s)
             """, ('admin', 'admin@taxoptimizer.local', password_hash, salt, datetime.now()), 
             fetch=False, show_error=False)
     except Exception:
-        # Tables might not exist yet - ignore
         pass
     
-    # Professional header with icon and title
+    # Professional centered header
     st.markdown(f"""
-        <div style="text-align: center; padding: 60px 0 40px 0;">
-            <div style="font-size: 5em; margin-bottom: 20px;">🏦</div>
-            <h1 style="font-size: 2.8em; font-weight: 800; color: #1e293b; margin-bottom: 12px; letter-spacing: -0.5px;">
+        <div style="text-align: center; padding: 50px 0 30px 0;">
+            <h1 style="font-size: 2.5em; font-weight: 800; color: #1e293b; margin-bottom: 10px; letter-spacing: -0.5px;">
                 {APP_NAME}
             </h1>
-            <p style="font-size: 1.15em; color: #64748b; font-weight: 500; margin-bottom: 40px;">
+            <p style="font-size: 1.1em; color: #64748b; font-weight: 500;">
                 {APP_SUBTITLE}
             </p>
         </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["🔐 Sign In", "📝 Create Account"])
+    # ── CONSTRAIN WIDTH: use 3-column layout so form sits in narrow centre column ──
+    col_left, col_center, col_right = st.columns([1, 1.4, 1])
     
-    # LOGIN TAB
-    with tab1:
-        st.markdown("### Sign In to Your Account")
-        st.markdown("")
+    with col_center:
+        tab1, tab2 = st.tabs(["🔐 Sign In", "📝 Create Account"])
         
-        with st.form("login_form"):
-            username_or_email = st.text_input("Username or Email", placeholder="Enter your username or email", key="login_user")
-            password = st.text_input("Password", type="password", placeholder="Enter your password", key="login_pass")
-            
+        # LOGIN TAB
+        with tab1:
+            st.markdown("### Sign In to Your Account")
             st.markdown("")
-            login_button = st.form_submit_button("🔐 Sign In", use_container_width=True, type="primary")
             
-            if login_button:
-                if not username_or_email or not password:
-                    st.error("⚠️ Please enter both username/email and password")
-                else:
-                    success, message, user_data = login_user(username_or_email, password)
-                    
+            with st.form("login_form"):
+                username_or_email = st.text_input(
+                    "Username or Email",
+                    placeholder="Enter your username or email",
+                    key="login_user"
+                )
+                password = st.text_input(
+                    "Password",
+                    type="password",
+                    placeholder="Enter your password",
+                    key="login_pass"
+                )
+                
+                st.markdown("")
+                login_button = st.form_submit_button(
+                    "🔐 Sign In",
+                    use_container_width=True,
+                    type="primary"
+                )
+                
+                if login_button:
+                    if not username_or_email or not password:
+                        st.error("⚠️ Please enter both username/email and password")
+                    else:
+                        success, message, user_data = login_user(username_or_email, password)
+                        
+                        if success:
+                            st.session_state.logged_in = True
+                            st.session_state.user_id = user_data['user_id']
+                            st.session_state.username = user_data['username']
+                            st.session_state.email = user_data['email']
+                            st.session_state.role = user_data['role']
+                            st.session_state.session_token = user_data['session_token']
+                            st.success(f"✅ {message}")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {message}")
+        
+        # REGISTER TAB
+        with tab2:
+            st.markdown("### Create Your Account")
+            st.markdown("")
+            
+            with st.form("register_form"):
+                new_username = st.text_input(
+                    "Username",
+                    placeholder="3-20 characters, letters and numbers",
+                    key="reg_user"
+                )
+                new_email = st.text_input(
+                    "Email Address",
+                    placeholder="your@email.com",
+                    key="reg_email"
+                )
+                new_password = st.text_input(
+                    "Password",
+                    type="password",
+                    placeholder="Minimum 8 characters",
+                    key="reg_pass"
+                )
+                confirm_password = st.text_input(
+                    "Confirm Password",
+                    type="password",
+                    placeholder="Re-enter your password",
+                    key="reg_confirm"
+                )
+                
+                st.markdown("")
+                register_button = st.form_submit_button(
+                    "✨ Create Account",
+                    use_container_width=True,
+                    type="primary"
+                )
+                
+                if register_button:
+                    success, message = register_user(new_username, new_email, new_password, confirm_password)
                     if success:
-                        st.session_state.logged_in = True
-                        st.session_state.user_id = user_data['user_id']
-                        st.session_state.username = user_data['username']
-                        st.session_state.email = user_data['email']
-                        st.session_state.role = user_data['role']
-                        st.session_state.session_token = user_data['session_token']
                         st.success(f"✅ {message}")
-                        st.rerun()
+                        st.balloons()
                     else:
                         st.error(f"❌ {message}")
-    
-    # REGISTER TAB
-    with tab2:
-        st.markdown("### Create Your Account")
-        st.markdown("")
         
-        with st.form("register_form"):
-            new_username = st.text_input("Username", placeholder="3-20 characters, letters and numbers", key="reg_user")
-            new_email = st.text_input("Email Address", placeholder="your@email.com", key="reg_email")
-            new_password = st.text_input("Password", type="password", placeholder="Minimum 8 characters", key="reg_pass")
-            confirm_password = st.text_input("Confirm Password", type="password", placeholder="Re-enter your password", key="reg_confirm")
-            
-            st.markdown("")
-            register_button = st.form_submit_button("✨ Create Account", use_container_width=True, type="primary")
-            
-            if register_button:
-                success, message = register_user(new_username, new_email, new_password, confirm_password)
+        # First time setup help — also inside the narrow column
+        st.markdown("")
+        with st.expander("ℹ️ First time setup?", expanded=False):
+            st.info("""
+                **Default Admin Account:**
                 
-                if success:
-                    st.success(f"✅ {message}")
-                    st.balloons()
-                else:
-                    st.error(f"❌ {message}")
+                Username: `admin`  
+                Password: `admin123`
+                
+                ⚠️ **Important:** Change the admin password immediately after first login.
+            """)
     
-    # First time setup help
-    st.markdown("")
-    with st.expander("ℹ️ First time setup?", expanded=False):
-        st.info("""
-            **Default Admin Account:**
-            
-            Username: `admin`  
-            Password: `admin123`
-            
-            ⚠️ **Important:** Change the admin password immediately after first login for security.
-        """)
-    
-    # Professional footer
+    # Footer — full width, centred
     st.markdown(f"""
         <div style="text-align: center; color: #94a3b8; font-size: 0.9em; margin-top: 60px; padding: 30px 20px;">
             <p style="font-weight: 600; color: #64748b; margin-bottom: 8px;">{APP_NAME} • {APP_VERSION}</p>
