@@ -43,7 +43,7 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.4.3 - Login Width Fix"
+APP_VERSION = "6.5.0 - Spousal RRSP Phase 1"
 APP_DATE = "February 17, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
@@ -1047,6 +1047,30 @@ def get_marginal_rate(income):
     return TAX_BRACKETS[-1]['rate']
 
 def calculate_annual_rrsp(data):
+    """
+    Calculate total annual RRSP contributions including employer match
+    AND spousal RRSP contributions.
+    
+    Spousal RRSP contributions count against the CONTRIBUTOR'S room,
+    so they are included in this total. They are tracked separately
+    for display purposes via data.get('spousal_rrsp_contribution').
+    """
+    base_salary = data.get('base_salary', 0)
+    biweekly_pct = data.get('biweekly_pct', 0)
+    employer_match_cap = data.get('employer_match', 0)
+    employee_contrib = base_salary * (biweekly_pct / 100)
+    employer_contrib = base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+    periodic_rrsp = employee_contrib + employer_contrib
+    lump_sum = data.get('rrsp_lump_sum_optimization', 0) + \
+                data.get('rrsp_lump_sum_additional', 0) + \
+                data.get('rrsp_lump_sum', 0)
+    # Spousal RRSP counts against contributor's room (CRA rule)
+    spousal_rrsp = data.get('spousal_rrsp_contribution', 0)
+    return periodic_rrsp + lump_sum + spousal_rrsp
+
+
+def calculate_personal_rrsp(data):
+    """Personal RRSP only (excludes spousal) — for display breakdown."""
     base_salary = data.get('base_salary', 0)
     biweekly_pct = data.get('biweekly_pct', 0)
     employer_match_cap = data.get('employer_match', 0)
@@ -3386,7 +3410,13 @@ if st.session_state.current_page == "Home":
                     "tfsa_room": 0,
                     "rrsp_balance_start": 0,
                     "tfsa_balance_start": 0,
-                    "target_cagr": 7.0
+                    "target_cagr": 7.0,
+                    "spouse_name": "",
+                    "spousal_rrsp_contribution": 0,
+                    "spouse_rrsp_balance_start": 0,
+                    "spouse_gross_income": 0,
+                    "spouse_age": 0,
+                    "last_spousal_contribution_year": 0
                 })
                 st.success(f"✓ Year {new_year_input} added successfully!")
                 st.rerun()
@@ -3932,6 +3962,68 @@ else:
             
             st.caption(f"💰 Total RRSP Lump Sum: ${rrsp_lump_sum_optimization + rrsp_lump_sum_additional:,.0f}")
             
+            # ------------------------------------------------------------------
+            # SPOUSAL RRSP SECTION
+            # ------------------------------------------------------------------
+            st.markdown("### 👫 Spousal RRSP")
+            st.caption("Contributions to your spouse's RRSP count against YOUR room but grow in their name")
+            
+            spouse_name = st.text_input(
+                "Spouse Name (optional)",
+                value=year_data.get("spouse_name", ""),
+                placeholder="e.g. Jane",
+                help="Used for display purposes only"
+            )
+            
+            spousal_rrsp_contribution = st.number_input(
+                "Spousal RRSP Contribution",
+                value=float(year_data.get("spousal_rrsp_contribution", 0)),
+                step=500.0,
+                min_value=0.0,
+                help="Amount you contribute to your spouse's RRSP. Counts against YOUR contribution room. You receive the tax refund."
+            )
+            
+            spouse_rrsp_balance_start = st.number_input(
+                "Spouse RRSP Balance (Start of Year)",
+                value=float(year_data.get("spouse_rrsp_balance_start", 0)),
+                step=1000.0,
+                min_value=0.0,
+                help="Your spouse's total RRSP value on January 1st. Used for household portfolio tracking."
+            )
+            
+            spouse_gross_income = st.number_input(
+                "Spouse Gross Income (optional)",
+                value=float(year_data.get("spouse_gross_income", 0)),
+                step=5000.0,
+                min_value=0.0,
+                help="💡 Used to warn if spousal RRSP income splitting may not be beneficial. Leave 0 to skip."
+            )
+            
+            spouse_age = st.number_input(
+                "Spouse Age (optional)",
+                value=int(year_data.get("spouse_age", 0)),
+                step=1,
+                min_value=0,
+                max_value=100,
+                help="Used to warn if spouse is 71+ (CRA prohibits contributions to their RRSP after Dec 31 of their 71st year)"
+            )
+            
+            # Real-time spousal RRSP warnings in sidebar
+            if spousal_rrsp_contribution > 0:
+                if spouse_age >= 71:
+                    st.error(f"🚨 CRA Rule: Cannot contribute to spouse's RRSP after Dec 31 of the year they turn 71!")
+                elif spouse_gross_income > 0 and spouse_gross_income > year_data.get('t4_gross_income', 0):
+                    st.warning(f"⚠️ Your spouse earns more than you. Spousal RRSP withdrawals may be taxed at a higher rate — income splitting benefit may not apply.")
+                else:
+                    st.success(f"✅ Spousal RRSP: ${spousal_rrsp_contribution:,.0f} to {spouse_name if spouse_name else 'spouse'}'s RRSP")
+            
+            # Show how spousal contribution is counted
+            if spousal_rrsp_contribution > 0:
+                rrsp_lump_sums_so_far = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
+                biweekly_total = base_salary * (biweekly_pct / 100) + base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+                total_so_far = biweekly_total + rrsp_lump_sums_so_far + spousal_rrsp_contribution
+                st.caption(f"📊 Combined room used: ${total_so_far:,.0f} (personal ${total_so_far - spousal_rrsp_contribution:,.0f} + spousal ${spousal_rrsp_contribution:,.0f})")
+            
             st.markdown("### 🌱 TFSA Strategy")
             
             tfsa_lump_sum = st.number_input(
@@ -4077,7 +4169,14 @@ else:
                     "tfsa_room": tfsa_room,
                     "rrsp_balance_start": rrsp_balance_start,
                     "tfsa_balance_start": tfsa_balance_start,
-                    "target_cagr": target_cagr
+                    "target_cagr": target_cagr,
+                    # Spousal RRSP fields
+                    "spouse_name": spouse_name,
+                    "spousal_rrsp_contribution": spousal_rrsp_contribution,
+                    "spouse_rrsp_balance_start": spouse_rrsp_balance_start,
+                    "spouse_gross_income": spouse_gross_income,
+                    "spouse_age": spouse_age,
+                    "last_spousal_contribution_year": selected_year if spousal_rrsp_contribution > 0 else year_data.get("last_spousal_contribution_year", 0)
                 })
                 
                 if success:
@@ -4096,31 +4195,52 @@ else:
     other_income = year_data.get("other_income", 0)
     total_gross_income = t4_gross_income + other_income
     
-    # Calculate RRSP contributions with correct employer matching logic
+    # Spousal RRSP data
+    spouse_name = year_data.get("spouse_name", "Spouse")
+    spousal_rrsp_contribution = year_data.get("spousal_rrsp_contribution", 0)
+    spouse_rrsp_balance_start = year_data.get("spouse_rrsp_balance_start", 0)
+    spouse_gross_income = year_data.get("spouse_gross_income", 0)
+    spouse_age = year_data.get("spouse_age", 0)
+    last_spousal_year = year_data.get("last_spousal_contribution_year", 0)
+    spouse_label = spouse_name if spouse_name else "Spouse"
+    
+    # Calculate RRSP contributions
     employee_rrsp_contribution = base_salary * (biweekly_pct / 100)
     employer_rrsp_contribution = base_salary * (min(biweekly_pct, employer_match_cap) / 100)
     annual_rrsp_periodic = employee_rrsp_contribution + employer_rrsp_contribution
     
     rrsp_lump_sum = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
-    total_rrsp_contributions = annual_rrsp_periodic + rrsp_lump_sum
+    personal_rrsp_contributions = annual_rrsp_periodic + rrsp_lump_sum
+    
+    # Total = personal + spousal (both count against YOUR room)
+    total_rrsp_contributions = personal_rrsp_contributions + spousal_rrsp_contribution
     taxable_income = max(0, total_gross_income - total_rrsp_contributions)
+    
+    # Over-contribution detection (raw, not floored)
+    raw_remaining_room = rrsp_room - total_rrsp_contributions
+    over_contribution_amount = max(0, -raw_remaining_room)
     
     # Portfolio calculations
     rrsp_balance_start = year_data.get("rrsp_balance_start", 0)
     tfsa_balance_start = year_data.get("tfsa_balance_start", 0)
-    target_cagr = year_data.get("target_cagr", 7.0) / 100  # Convert to decimal
-    
-    # Calculate end of year balances (growth + new contributions)
-    # Assuming contributions happen throughout the year, use half-year growth on new money
+    target_cagr = year_data.get("target_cagr", 7.0) / 100
+
+    # Personal RRSP growth
     rrsp_growth_existing = rrsp_balance_start * target_cagr
-    rrsp_growth_new_contrib = total_rrsp_contributions * (target_cagr / 2)  # Half year average
-    rrsp_balance_end = rrsp_balance_start + rrsp_growth_existing + total_rrsp_contributions + rrsp_growth_new_contrib
-    
+    rrsp_growth_new_contrib = personal_rrsp_contributions * (target_cagr / 2)
+    rrsp_balance_end = rrsp_balance_start + rrsp_growth_existing + personal_rrsp_contributions + rrsp_growth_new_contrib
+
+    # Spouse RRSP growth (balance grows + new spousal contributions)
+    spouse_rrsp_growth_existing = spouse_rrsp_balance_start * target_cagr
+    spouse_rrsp_growth_new = spousal_rrsp_contribution * (target_cagr / 2)
+    spouse_rrsp_balance_end = spouse_rrsp_balance_start + spouse_rrsp_growth_existing + spousal_rrsp_contribution + spouse_rrsp_growth_new
+
+    # TFSA growth
     tfsa_growth_existing = tfsa_balance_start * target_cagr
     tfsa_growth_new_contrib = tfsa_lump_sum * (target_cagr / 2)
     tfsa_balance_end = tfsa_balance_start + tfsa_growth_existing + tfsa_lump_sum + tfsa_growth_new_contrib
-    
-    total_portfolio_value = rrsp_balance_end + tfsa_balance_end
+
+    total_portfolio_value = rrsp_balance_end + spouse_rrsp_balance_end + tfsa_balance_end
     
     # Calculate tax refund
     estimated_refund = calculate_tax_refund(total_gross_income, total_rrsp_contributions)
@@ -4149,6 +4269,69 @@ else:
     
     # Header
     st.title(f"🏛️ Tax Optimization Strategy: {selected_year}")
+    
+    # ------------------------------------------------------------------
+    # SPOUSAL RRSP ALERTS — shown prominently at top of year view
+    # ------------------------------------------------------------------
+    if over_contribution_amount > 0:
+        st.error(f"""
+        🚨 **OVER-CONTRIBUTION WARNING**
+        
+        Your total RRSP contributions (${total_rrsp_contributions:,.0f}) exceed your available room 
+        (${rrsp_room:,.0f}) by **${over_contribution_amount:,.0f}**.
+        
+        CRA charges a **1% per month penalty** on amounts over $2,000 above your limit.
+        Estimated monthly penalty: **${max(0, over_contribution_amount - 2000) * 0.01:,.0f}/month**
+        
+        ➡️ Reduce your contributions or verify your NOA room is correct.
+        """)
+    
+    elif rrsp_room > 0 and total_rrsp_contributions > 0:
+        pct_used = (total_rrsp_contributions / rrsp_room) * 100
+        if pct_used >= 90 and spousal_rrsp_contribution == 0 and remaining_rrsp_room > 0:
+            st.warning(f"""
+            ⚠️ **Approaching RRSP Room Limit — Consider Spousal RRSP**
+            
+            You've used **{pct_used:.1f}%** of your RRSP room (${total_rrsp_contributions:,.0f} of ${rrsp_room:,.0f}).
+            You have **${remaining_rrsp_room:,.0f}** remaining.
+            
+            💡 **Tip:** Any additional contributions you want to make can go into a **Spousal RRSP**.  
+            - Still uses YOUR contribution room ✓  
+            - You still get the full tax refund ✓  
+            - Spouse owns the account — withdrawals taxed at their (lower) rate ✓  
+            
+            Add your spouse's details in the sidebar under **👫 Spousal RRSP**.
+            """)
+    
+    if spousal_rrsp_contribution > 0:
+        # 3-year attribution rule warning
+        if last_spousal_year > 0 and (selected_year - last_spousal_year) < 3:
+            years_locked = 3 - (selected_year - last_spousal_year)
+            safe_year = last_spousal_year + 3
+            st.warning(f"""
+            📅 **3-Year Attribution Rule — Active**
+            
+            You contributed to **{spouse_label}'s** RRSP in {last_spousal_year}.
+            If {spouse_label} withdraws before **January 1, {safe_year}**, that withdrawal 
+            will be **taxed in YOUR hands** (not theirs), eliminating the income-splitting benefit.
+            
+            ⏳ {years_locked} year(s) remaining until safe withdrawal window opens.
+            """)
+        
+        # Age-71 warning
+        if spouse_age >= 71:
+            st.error(f"🚨 **CRA Rule:** Cannot contribute to {spouse_label}'s RRSP after December 31 of the year they turn 71. Please remove this contribution.")
+        
+        # High-income spouse warning
+        if spouse_gross_income > 0 and spouse_gross_income > total_gross_income:
+            st.warning(f"""
+            ⚠️ **Income Splitting May Not Apply**
+            
+            {spouse_label}'s income (${spouse_gross_income:,.0f}) is higher than yours (${total_gross_income:,.0f}).
+            Spousal RRSP withdrawals may be taxed at a **higher rate** than your own withdrawals.
+            The income-splitting benefit may be reduced or eliminated.
+            Consult a tax advisor before proceeding.
+            """)
     
     # Status Card
     col_status1, col_status2 = st.columns([3, 1])
@@ -4302,33 +4485,94 @@ else:
         st.markdown("### 💼 Portfolio Growth Tracker")
         
         # Show RRSP contribution breakdown
-        if annual_rrsp_periodic > 0:
+        if annual_rrsp_periodic > 0 or spousal_rrsp_contribution > 0:
             st.markdown("#### 🎯 RRSP Contribution Breakdown")
-            col_breakdown1, col_breakdown2, col_breakdown3 = st.columns(3)
             
-            with col_breakdown1:
-                st.metric(
-                    "Your Paycheck Contributions",
-                    f"${employee_rrsp_contribution:,.0f}",
-                    delta=f"{biweekly_pct:.1f}% of base salary",
-                    help="Amount deducted from your paychecks throughout the year"
-                )
+            # Row 1: Paycheck contributions
+            if annual_rrsp_periodic > 0:
+                col_breakdown1, col_breakdown2, col_breakdown3 = st.columns(3)
+                
+                with col_breakdown1:
+                    st.metric(
+                        "Your Paycheck Contributions",
+                        f"${employee_rrsp_contribution:,.0f}",
+                        delta=f"{biweekly_pct:.1f}% of base salary",
+                        help="Amount deducted from your paychecks throughout the year"
+                    )
+                
+                with col_breakdown2:
+                    st.metric(
+                        "Employer Match",
+                        f"${employer_rrsp_contribution:,.0f}",
+                        delta=f"{min(biweekly_pct, employer_match_cap):.1f}% matched",
+                        help=f"Free money! Employer matches 100% up to {employer_match_cap:.1f}% cap"
+                    )
+                
+                with col_breakdown3:
+                    st.metric(
+                        "Total Periodic RRSP",
+                        f"${annual_rrsp_periodic:,.0f}",
+                        delta=f"${employer_rrsp_contribution:,.0f} is FREE",
+                        help="Combined employee + employer contributions from paychecks"
+                    )
             
-            with col_breakdown2:
-                st.metric(
-                    "Employer Match",
-                    f"${employer_rrsp_contribution:,.0f}",
-                    delta=f"{min(biweekly_pct, employer_match_cap):.1f}% matched",
-                    help=f"Free money! Employer matches 100% up to {employer_match_cap:.1f}% cap"
-                )
-            
-            with col_breakdown3:
-                st.metric(
-                    "Total Periodic RRSP",
-                    f"${annual_rrsp_periodic:,.0f}",
-                    delta=f"${employer_rrsp_contribution:,.0f} is FREE",
-                    help="Combined employee + employer contributions from paychecks"
-                )
+            # Row 2: Spousal RRSP breakdown (if applicable)
+            if spousal_rrsp_contribution > 0:
+                st.markdown("")
+                col_sp1, col_sp2, col_sp3 = st.columns(3)
+                
+                with col_sp1:
+                    st.metric(
+                        f"Personal RRSP (Lump Sum)",
+                        f"${rrsp_lump_sum:,.0f}",
+                        help="Your personal lump-sum RRSP contributions"
+                    )
+                
+                with col_sp2:
+                    st.metric(
+                        f"👫 Spousal RRSP ({spouse_label})",
+                        f"${spousal_rrsp_contribution:,.0f}",
+                        delta="Uses YOUR room • YOU get refund",
+                        help=f"Contribution to {spouse_label}'s RRSP. Counts against your room, you receive the tax deduction."
+                    )
+                
+                with col_sp3:
+                    st.metric(
+                        "Combined RRSP Total",
+                        f"${total_rrsp_contributions:,.0f}",
+                        delta=f"${spousal_rrsp_contribution:,.0f} to {spouse_label}",
+                        help="Personal + Spousal contributions combined (all count against your room)"
+                    )
+                
+                # Room usage bar with spousal split
+                st.markdown("")
+                if rrsp_room > 0:
+                    personal_pct = min(100, personal_rrsp_contributions / rrsp_room * 100)
+                    spousal_pct = min(100 - personal_pct, spousal_rrsp_contribution / rrsp_room * 100)
+                    remaining_pct = max(0, 100 - personal_pct - spousal_pct)
+                    
+                    st.markdown("**Your RRSP Room Usage**")
+                    st.markdown(f"""
+                        <div style="background: #f1f5f9; border-radius: 8px; overflow: hidden; height: 28px; display: flex;">
+                            <div style="background: #3b82f6; width: {personal_pct:.1f}%; display: flex; align-items: center; 
+                                 justify-content: center; color: white; font-size: 0.8em; font-weight: 600; white-space: nowrap; padding: 0 4px;">
+                                {f'Personal {personal_pct:.0f}%' if personal_pct > 8 else ''}
+                            </div>
+                            <div style="background: #8b5cf6; width: {spousal_pct:.1f}%; display: flex; align-items: center; 
+                                 justify-content: center; color: white; font-size: 0.8em; font-weight: 600; white-space: nowrap; padding: 0 4px;">
+                                {f'Spousal {spousal_pct:.0f}%' if spousal_pct > 8 else ''}
+                            </div>
+                            <div style="background: #e2e8f0; width: {remaining_pct:.1f}%; display: flex; align-items: center; 
+                                 justify-content: center; color: #64748b; font-size: 0.8em; padding: 0 4px;">
+                                {f'Available' if remaining_pct > 8 else ''}
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 0.85em;">
+                            <span>🔵 Personal: ${personal_rrsp_contributions:,.0f}</span>
+                            <span>🟣 Spousal: ${spousal_rrsp_contribution:,.0f}</span>
+                            <span>⬜ Available: ${remaining_rrsp_room:,.0f}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
             
             st.divider()
         
@@ -4340,19 +4584,30 @@ else:
         # Create portfolio table
         portfolio_table_data = []
         
-        # RRSP Row
+        # Personal RRSP Row
         portfolio_table_data.append({
-            "Account": "RRSP",
+            "Account": "🏦 RRSP (Yours)",
             "Start Balance": f"${rrsp_balance_start:,.0f}",
-            "New Contributions": f"${total_rrsp_contributions:,.0f}",
+            "New Contributions": f"${personal_rrsp_contributions:,.0f}",
             "Investment Growth": f"${rrsp_growth_existing + rrsp_growth_new_contrib:,.0f}",
             "End Balance": f"${rrsp_balance_end:,.0f}",
             "Net Gain": f"${rrsp_balance_end - rrsp_balance_start:,.0f}"
         })
         
+        # Spousal RRSP Row (only show if data exists)
+        if spousal_rrsp_contribution > 0 or spouse_rrsp_balance_start > 0:
+            portfolio_table_data.append({
+                "Account": f"👫 RRSP ({spouse_label})",
+                "Start Balance": f"${spouse_rrsp_balance_start:,.0f}",
+                "New Contributions": f"${spousal_rrsp_contribution:,.0f}",
+                "Investment Growth": f"${spouse_rrsp_growth_existing + spouse_rrsp_growth_new:,.0f}",
+                "End Balance": f"${spouse_rrsp_balance_end:,.0f}",
+                "Net Gain": f"${spouse_rrsp_balance_end - spouse_rrsp_balance_start:,.0f}"
+            })
+        
         # TFSA Row
         portfolio_table_data.append({
-            "Account": "TFSA",
+            "Account": "🌱 TFSA",
             "Start Balance": f"${tfsa_balance_start:,.0f}",
             "New Contributions": f"${tfsa_lump_sum:,.0f}",
             "Investment Growth": f"${tfsa_growth_existing + tfsa_growth_new_contrib:,.0f}",
@@ -4360,19 +4615,20 @@ else:
             "Net Gain": f"${tfsa_balance_end - tfsa_balance_start:,.0f}"
         })
         
-        # Total Row
-        total_start = rrsp_balance_start + tfsa_balance_start
+        # Total Row (household)
+        total_start = rrsp_balance_start + spouse_rrsp_balance_start + tfsa_balance_start
         total_contributions = total_rrsp_contributions + tfsa_lump_sum
-        total_growth = (rrsp_growth_existing + rrsp_growth_new_contrib + 
-                      tfsa_growth_existing + tfsa_growth_new_contrib)
+        total_growth = (rrsp_growth_existing + rrsp_growth_new_contrib +
+                        spouse_rrsp_growth_existing + spouse_rrsp_growth_new +
+                        tfsa_growth_existing + tfsa_growth_new_contrib)
         
         portfolio_table_data.append({
-            "Account": "**TOTAL**",
-            "Start Balance": f"**${total_start:,.0f}**",
-            "New Contributions": f"**${total_contributions:,.0f}**",
-            "Investment Growth": f"**${total_growth:,.0f}**",
-            "End Balance": f"**${total_portfolio_value:,.0f}**",
-            "Net Gain": f"**${total_portfolio_value - total_start:,.0f}**"
+            "Account": "📊 HOUSEHOLD TOTAL",
+            "Start Balance": f"${total_start:,.0f}",
+            "New Contributions": f"${total_contributions:,.0f}",
+            "Investment Growth": f"${total_growth:,.0f}",
+            "End Balance": f"${total_portfolio_value:,.0f}",
+            "Net Gain": f"${total_portfolio_value - total_start:,.0f}"
         })
         
         df_portfolio = pd.DataFrame(portfolio_table_data)
@@ -4647,7 +4903,7 @@ else:
         </div>
     """, unsafe_allow_html=True)
     
-    ac1, ac2, ac3, ac4, ac5 = st.columns(5)
+    ac1, ac2, ac3, ac4, ac5, ac6 = st.columns(6)
     
     with ac1:
         st.metric(
@@ -4665,27 +4921,35 @@ else:
     
     with ac3:
         st.metric(
+            f"👫 Spousal RRSP",
+            f"${spousal_rrsp_contribution:,.0f}",
+            delta=f"To {spouse_label}" if spousal_rrsp_contribution > 0 and spouse_label else None,
+            help=f"Contribution to {spouse_label}'s RRSP — uses your room, you get the refund"
+        )
+    
+    with ac4:
+        st.metric(
             "TFSA Deposit",
             f"${tfsa_lump_sum:,.0f}",
             help="Tax-free savings contribution"
         )
     
-    with ac4:
+    with ac5:
         st.metric(
             "Expected Refund",
             f"${estimated_refund:,.0f}",
             delta=f"+{(estimated_refund/max(1,total_rrsp_contributions))*100:.1f}%",
-            help="Tax refund from all RRSP contributions"
+            help="Tax refund from ALL RRSP contributions (personal + spousal)"
         )
     
-    with ac5:
-        net_cashflow = estimated_refund - rrsp_lump_sum - tfsa_lump_sum
+    with ac6:
+        net_cashflow = estimated_refund - rrsp_lump_sum - spousal_rrsp_contribution - tfsa_lump_sum
         st.metric(
             "Net Cashflow Impact",
             f"${net_cashflow:,.0f}",
             delta="Surplus" if net_cashflow >= 0 else "Investment",
             delta_color="normal" if net_cashflow >= 0 else "inverse",
-            help="Refund minus deposits"
+            help="Refund minus all lump-sum deposits (personal RRSP + spousal RRSP + TFSA)"
         )
     
     st.divider()
