@@ -1,21 +1,45 @@
 """
 Canadian Tax Optimizer - PROFESSIONAL EDITION
-Version 6.2.0 - Institutional-Grade UI
+Version 6.5.0 - Spousal RRSP Phase 1
 
-Professional application featuring:
-- ✨ Institutional-grade user interface (professional portfolio management design)
-- 👑 Advanced admin dashboard with 4 colored metric cards
-- 🎨 Professional login page with animated branding
-- 📊 Tab-based navigation and enhanced analytics
-- 🔐 Complete multi-user authentication system
-- 🔄 Auto-database migration (creates tables automatically!)
-- 💼 All tax optimization features (RRSP, TFSA, multi-year planning)
-- 📈 Portfolio tracking with growth projections
-- 💡 Strategic insights and recommendations
+Professional multi-user tax optimization platform featuring:
+
+── CORE TAX FEATURES ──────────────────────────────────────────
+- 💼 Multi-year RRSP & TFSA planning with CRA deadline tracking
+- 🏦 Personal RRSP (paycheck + employer match + lump sums)
+- 👫 Spousal RRSP tracking (Phase 1) — room, refund, portfolio
+- 🌱 TFSA contribution management
+- 🎯 Penthouse bracket (47.97%) avoidance optimization
+- 💡 Strategic insights & recommendations
+- 📈 Portfolio growth projections with CAGR
+
+── SPOUSAL RRSP (v6.5.0 NEW) ──────────────────────────────────
+- 👫 Spousal RRSP contribution input and tracking
+- 📊 Combined room usage: personal + spousal vs your NOA limit
+- 💰 Refund calculated on full combined amount (CRA rule)
+- 🚨 Over-contribution detection with CRA penalty estimate
+- ⚠️ 90%+ room warning with spousal RRSP suggestion
+- 📅 3-Year Attribution Rule tracker and warning
+- ⚠️ High-income spouse bracket warning
+- 🚫 Age-71 CRA contribution block enforcement
+- 📊 Portfolio table: personal RRSP + spousal RRSP + TFSA + household total
+- 🔵🟣 Visual room split bar (personal vs spousal vs available)
+
+── ADMIN & ANALYTICS ──────────────────────────────────────────
+- 👑 Admin dashboard with 4 colored metric cards
+- 📊 Complete analytics dashboard (6 modules)
+- 🔐 User impersonation, selective reset, nuclear reset
+- 📧 Email notification system (SMTP)
+- ℹ️ Version info page with full changelog
+
+── UI & PLATFORM ──────────────────────────────────────────────
+- 🎨 Institutional-grade professional UI
+- ⚡ Quick Stats cards + contribution progress bars
+- 🔐 Multi-user authentication (PostgreSQL)
+- ☁️ Streamlit Cloud deployment ready
+- 🔄 Auto-migration database schema
 
 Based on institutional portfolio management design principles
-Ready for enterprise deployment on Streamlit Cloud
-NO MANUAL SQL REQUIRED - Tables create automatically on first run!
 """
 
 import streamlit as st
@@ -30,15 +54,242 @@ import hashlib
 import secrets
 import re
 import json
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import traceback
 
 # ============================================================================
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.2.0 - PROFESSIONAL EDITION"
-APP_DATE = "February 2026"
+APP_VERSION = "6.5.2 - Professional Messaging"
+APP_DATE = "February 17, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
+
+# Version Changelog
+CHANGELOG = """
+## 🎉 Version 6.5.2 - Professional Messaging & Clarity (Feb 17, 2026)
+
+### ✨ IMPROVEMENTS:
+
+**📝 Pending Items - Professional Rewrite:**
+- Completely rewrote "Partial Optimization" messaging for clarity and professionalism
+- Removed confusing "(personal OR spousal)" phrasing that implied separate room pools
+- Added clear 4-step strategy breakdown with numbered action items
+- Included specific dollar amounts for tax savings at each step
+- Added explicit clarification: Personal and Spousal RRSP share the SAME room pool
+
+**🎯 Key Clarifications Added:**
+- **Strategy 1:** Use remaining room (partial optimization with specific tax savings)
+- **Strategy 2:** Accept partial exposure this year (with cost calculation)
+- **Strategy 3:** Plan for next year's new room (projected amount shown)
+- **Strategy 4:** NEW - Spouse's own RRSP option (if spouse has income and their own room)
+
+**💡 Educational Improvements:**
+- Clear distinction between "Spousal RRSP" (uses YOUR room) and "Spouse's Own RRSP" (uses THEIR room)
+- Explanation that spouse's own contributions don't help YOUR optimization but reduce household tax
+- Professional formatting with clear sections and bullet points
+- Removed all instances of broken HTML rendering
+
+**Before (Confusing):**
+```
+Add your remaining $27,200 to RRSP (personal OR spousal)
+You'll still have $34,560 in Penthouse exposure
+```
+
+**After (Clear & Professional):**
+```
+📊 Recommended Strategy:
+
+1. Use Your Remaining Room (Partial Optimization)
+   • Add $27,200 to RRSP (split between personal/spousal as desired)
+   • Both use same room pool
+   • Tax savings: $13,048
+   • Reduces exposure from $61,760 to $34,560
+
+2. Accept Partial Optimization This Year
+   • Remaining exposure: $34,560
+   • Tax cost: $16,578
+   • Still better than doing nothing
+
+3. Plan for Next Year (2029)
+   • New room: ~$46,800
+   • Eliminate remaining exposure
+   • Additional savings: $16,578
+
+4. Alternative: Spouse's Own RRSP
+   • If spouse has income and their own room
+   • Reduces household tax burden
+```
+
+---
+
+## 🎉 Version 6.5.1 - Pending Items Logic Fix (Feb 17, 2026)
+
+### 🐛 CRITICAL BUG FIX:
+- Fixed: Pending Items no longer suggests adding to spousal RRSP when room = $0
+- Fixed: Logic now correctly handles three scenarios:
+  1. **No room left** ($0): Shows "room fully used, cannot optimize" message
+  2. **Enough room**: Suggests straightforward RRSP addition
+  3. **Partial room**: Suggests using remaining room for partial optimization
+
+### 📝 What Changed:
+**Before (Buggy):**
+- User has $44,000 room
+- User enters $44,000 personal RRSP
+- App wrongly suggested: "Add $49,560 to spousal RRSP" 
+- Result: Over-contribution error!
+
+**After (Fixed):**
+- App correctly says: "Room fully used. Cannot add more RRSP (personal OR spousal)"
+- Provides actionable alternatives: verify NOA, accept partial optimization, plan for next year
+
+### 💡 Clarification Added:
+- Reminder: Spousal RRSP uses YOUR contribution room (not separate room)
+- When your room = $0, you cannot contribute to spousal RRSP
+- Next year's projected room amount shown
+
+---
+
+## 🎉 Version 6.5.0 - Spousal RRSP Phase 1 (Feb 17, 2026)
+
+### ✨ NEW FEATURES:
+
+**👫 Spousal RRSP Support:**
+- Track spousal RRSP contributions separately from personal RRSP
+- Contributions count against YOUR room (CRA compliant)
+- Tax refund calculated on combined personal + spousal amounts
+- Separate portfolio tracking for personal and spouse RRSPs
+- Household portfolio view (personal RRSP + spousal RRSP + TFSA)
+
+**🚨 Smart Validation & Warnings:**
+- Pre-save validation blocks over-contribution BEFORE saving
+- Intelligent suggestions for using spousal RRSP when room is exceeded
+- 3-Year Attribution Rule tracking and warnings
+- Age-71 CRA contribution block enforcement
+- High-income spouse bracket warning
+- Over-contribution detection with CRA penalty estimate ($X/month)
+
+**📊 Enhanced CRA Limits Section:**
+- Separate "Your Limits" vs "Spouse's RRSP" sections for clarity
+- Personal RRSP room usage bar (shows YOUR contributions only)
+- Combined room usage check in spouse section (personal + spousal)
+- Visual split bar: Personal % | Spousal % | Available %
+- Spouse's own RRSP room field (informational, for household records)
+
+**💡 Improved Pending Items:**
+- Smart split recommendations when RRSP room is insufficient
+- Prioritizes spousal RRSP with exact dollar amounts
+- Clear action steps: "Add $X to personal, $Y to spousal"
+- Avoids generic suggestions, provides specific solutions
+
+### 🐛 BUG FIXES:
+- Fixed: TFSA progress bar now shows current year (2026) instead of latest planned year
+- Fixed: Progress bars display correct contribution data
+- Fixed: spouse_rrsp_room field now saves correctly
+
+### 🎨 UI/UX IMPROVEMENTS:
+- Collapsible "Spouse's RRSP (Optional)" section
+- Singles/non-spousal users can skip the section entirely
+- Professional sidebar branding with app name and version info
+- Admin role badge display
+
+### 📋 PHASE 2 FEATURES (Deferred):
+- Income splitting benefit calculator
+- Smart contribution splitter (optimal personal vs spousal allocation)
+- Household combined view toggle
+- Retirement income projections
+
+---
+
+## 🎉 Version 6.4.2 - Status Consistency Fix (Feb 17, 2026)
+
+### 🐛 BUG FIXES:
+- Fixed: New years with zero income no longer show as "Optimized" (green)
+- Fixed: Year tiles now show "Empty" (gray) when no income is entered
+- Fixed: All status displays (tile, year view, quick stats) now use identical logic
+- Added: has_year_data() helper for clean income check
+- Fixed: Quick Stats only counts years with actual income data
+
+### 📊 Status Logic Now Consistent:
+- ⚪ Empty = No income entered (zero data)
+- 🟠 In Progress = Has income but above $181,440 threshold
+- 🟢 Optimized = Has income AND below $181,440 threshold
+
+---
+
+## 🎉 Version 6.4.1 - Bug Fix (Feb 15, 2026)
+
+### 🐛 BUG FIXES:
+- Fixed: "Add Year" button TypeError (missing user_id parameter)
+
+---
+
+## 🎉 Version 6.4.0 - Power Admin & Notifications (Feb 15, 2026)
+
+### ✨ NEW FEATURES:
+
+**📊 Home Page Enhancements:**
+- Quick Stats Cards: Total tax saved, total contributions, portfolio value
+- Contribution Progress Bars: Visual room utilization for RRSP and TFSA
+- Lifetime savings summary across all years
+
+**👑 Admin Power Tools:**
+- 🔐 Login as Any User: Admin impersonation to view user accounts
+- 🔄 Reset User Data: Clear all planning years for any user
+- 💣 Nuclear Database Reset: Delete ALL data and start fresh
+- Enhanced user management controls
+
+**📧 Email Notification System:**
+- Welcome email when user creates account
+- Tax year optimization alerts
+- RRSP deadline reminders (30/60/90 days)
+- Contribution limit warnings
+- SMTP configuration in admin settings
+
+**ℹ️ Version Info Page:**
+- Accessible to all users via sidebar
+- Complete changelog history
+- Feature highlights
+- Update notifications
+
+### 🔧 Technical Improvements:
+- Email templates with HTML formatting
+- SMTP error handling and logging
+- Session management for impersonation
+- Safe database reset with confirmations
+
+---
+
+## Previous Versions:
+
+### v6.3.2 - UI Fixes (Feb 14, 2026)
+- Fixed white box on login page
+- Fixed admin auto-creation logic
+- Cleaned up login page styling
+
+### v6.3.0 - Complete Analytics (Feb 14, 2026)
+- User activity trends (30-day tracking)
+- Portfolio growth visualization
+- Tax optimization success tracking
+- Contribution pattern analysis
+- Limit warning system
+- Top optimizers leaderboard
+
+### v6.2.0 - Professional UI (Feb 13, 2026)
+- Institutional-grade login page
+- Purple gradient admin dashboard
+- 4 colored metric cards
+- Tab navigation system
+
+### v6.1.0 - Multi-User Platform (Feb 12, 2026)
+- PostgreSQL database integration
+- Multi-user authentication
+- Session management
+- Auto-migration system
+"""
 
 # Page config - must be first Streamlit command
 st.set_page_config(
@@ -454,7 +705,154 @@ def register_user(username, email, password, confirm_password):
     )
     
     role_msg = " (Admin)" if role == 'admin' else ""
+    
+    # Send welcome email (if configured)
+    try:
+        send_welcome_email(username, email)
+    except:
+        pass  # Don't fail registration if email fails
+    
     return True, f"Account created successfully{role_msg}! Please login."
+
+# ============================================================================
+# EMAIL NOTIFICATION SYSTEM
+# ============================================================================
+
+def get_smtp_config():
+    """Get SMTP configuration from Streamlit secrets"""
+    try:
+        if hasattr(st, 'secrets') and 'email' in st.secrets:
+            return {
+                'enabled': st.secrets.email.get('enabled', False),
+                'smtp_server': st.secrets.email.get('smtp_server', ''),
+                'smtp_port': st.secrets.email.get('smtp_port', 587),
+                'smtp_username': st.secrets.email.get('smtp_username', ''),
+                'smtp_password': st.secrets.email.get('smtp_password', ''),
+                'from_email': st.secrets.email.get('from_email', ''),
+                'from_name': st.secrets.email.get('from_name', APP_NAME)
+            }
+        return {'enabled': False}
+    except:
+        return {'enabled': False}
+
+def send_email(to_email, subject, html_body, plain_body=None):
+    """Send email notification"""
+    config = get_smtp_config()
+    if not config.get('enabled'):
+        return True, "Email disabled"
+    
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = f"{config['from_name']} <{config['from_email']}>"
+        msg['To'] = to_email
+        
+        if plain_body:
+            msg.attach(MIMEText(plain_body, 'plain'))
+        msg.attach(MIMEText(html_body, 'html'))
+        
+        with smtplib.SMTP(config['smtp_server'], config['smtp_port']) as server:
+            server.starttls()
+            server.login(config['smtp_username'], config['smtp_password'])
+            server.send_message(msg)
+        
+        return True, "Email sent"
+    except Exception as e:
+        return False, str(e)
+
+def send_welcome_email(username, email):
+    """Send welcome email to new user"""
+    subject = f"Welcome to {APP_NAME}!"
+    html_body = f"""
+    <html><body style="font-family: Arial, sans-serif;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 30px; border-radius: 10px; text-align: center;">
+            <h1>🏦 Welcome to {APP_NAME}!</h1>
+        </div>
+        <div style="background: #f9fafb; padding: 30px; margin-top: 20px; border-radius: 10px;">
+            <h2>Hello {username}! 👋</h2>
+            <p>Your account has been created successfully!</p>
+            <h3 style="color: #3b82f6;">🚀 Get Started:</h3>
+            <ul>
+                <li>Set up your first planning year</li>
+                <li>Enter your income and contribution room</li>
+                <li>Get instant tax optimization insights</li>
+                <li>Track portfolio growth over time</li>
+            </ul>
+        </div>
+        <div style="text-align: center; margin-top: 30px; color: #64748b;">
+            <p>{APP_NAME} • {APP_SUBTITLE}</p>
+        </div>
+    </div>
+    </body></html>
+    """
+    plain_body = f"Welcome to {APP_NAME}!\n\nHello {username}!\n\nYour account has been created successfully."
+    return send_email(email, subject, html_body, plain_body)
+
+def send_optimization_alert(username, email, year, taxable_income, threshold=181440):
+    """Send tax optimization alert"""
+    is_optimized = taxable_income < threshold
+    subject = f"{'🎉' if is_optimized else '⚠️'} {year} Tax Year {'Optimized!' if is_optimized else 'Needs Work'}"
+    status = "Optimized" if is_optimized else "Needs Optimization"
+    color = "#10b981" if is_optimized else "#f59e0b"
+    
+    html_body = f"""
+    <html><body style="font-family: Arial, sans-serif;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: {color}; color: white; padding: 30px; border-radius: 10px; text-align: center;">
+            <h1>{year} Tax Year Update</h1>
+            <p style="font-size: 18px;">Status: {status}</p>
+        </div>
+        <div style="background: #f9fafb; padding: 30px; margin-top: 20px; border-radius: 10px;">
+            <h2>Hi {username},</h2>
+            <p>Taxable Income: ${taxable_income:,.0f}<br>
+            Penthouse Threshold: ${threshold:,.0f}</p>
+        </div>
+    </div>
+    </body></html>
+    """
+    return send_email(email, subject, html_body)
+
+def send_deadline_reminder(username, email, year, days_until, deadline_date):
+    """Send RRSP deadline reminder"""
+    urgency = "🔴 URGENT" if days_until <= 30 else "⚠️ IMPORTANT" if days_until <= 60 else "📅 REMINDER"
+    subject = f"{urgency}: RRSP Deadline in {days_until} Days ({year})"
+    
+    html_body = f"""
+    <html><body style="font-family: Arial, sans-serif;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #ef4444; color: white; padding: 30px; border-radius: 10px; text-align: center;">
+            <h1>⏰ RRSP Deadline Reminder</h1>
+            <p style="font-size: 24px; font-weight: 700;">{days_until} Days Remaining</p>
+        </div>
+        <div style="background: #f9fafb; padding: 30px; margin-top: 20px; border-radius: 10px;">
+            <h2>Hi {username},</h2>
+            <p>Tax Year: {year}<br>Deadline: {deadline_date}<br>Days Remaining: {days_until}</p>
+        </div>
+    </div>
+    </body></html>
+    """
+    return send_email(email, subject, html_body)
+
+def send_limit_warning(username, email, account_type, utilized_pct, remaining):
+    """Send contribution limit warning"""
+    subject = f"⚠️ Approaching {account_type} Limit ({utilized_pct:.0f}%)"
+    
+    html_body = f"""
+    <html><body style="font-family: Arial, sans-serif;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #f59e0b; color: white; padding: 30px; border-radius: 10px; text-align: center;">
+            <h1>⚠️ Contribution Limit Alert</h1>
+            <p>{utilized_pct:.0f}% Utilized</p>
+        </div>
+        <div style="background: #f9fafb; padding: 30px; margin-top: 20px; border-radius: 10px;">
+            <h2>Hi {username},</h2>
+            <p>Account: {account_type}<br>Utilization: {utilized_pct:.1f}%<br>Remaining: ${remaining:,.0f}</p>
+        </div>
+    </div>
+    </body></html>
+    """
+    return send_email(email, subject, html_body)
 
 def login_user(username_or_email, password):
     """Authenticate user and create session"""
@@ -803,6 +1201,30 @@ def get_marginal_rate(income):
     return TAX_BRACKETS[-1]['rate']
 
 def calculate_annual_rrsp(data):
+    """
+    Calculate total annual RRSP contributions including employer match
+    AND spousal RRSP contributions.
+    
+    Spousal RRSP contributions count against the CONTRIBUTOR'S room,
+    so they are included in this total. They are tracked separately
+    for display purposes via data.get('spousal_rrsp_contribution').
+    """
+    base_salary = data.get('base_salary', 0)
+    biweekly_pct = data.get('biweekly_pct', 0)
+    employer_match_cap = data.get('employer_match', 0)
+    employee_contrib = base_salary * (biweekly_pct / 100)
+    employer_contrib = base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+    periodic_rrsp = employee_contrib + employer_contrib
+    lump_sum = data.get('rrsp_lump_sum_optimization', 0) + \
+                data.get('rrsp_lump_sum_additional', 0) + \
+                data.get('rrsp_lump_sum', 0)
+    # Spousal RRSP counts against contributor's room (CRA rule)
+    spousal_rrsp = data.get('spousal_rrsp_contribution', 0)
+    return periodic_rrsp + lump_sum + spousal_rrsp
+
+
+def calculate_personal_rrsp(data):
+    """Personal RRSP only (excludes spousal) — for display breakdown."""
     base_salary = data.get('base_salary', 0)
     biweekly_pct = data.get('biweekly_pct', 0)
     employer_match_cap = data.get('employer_match', 0)
@@ -835,15 +1257,41 @@ def get_rrsp_deadline(tax_year):
     return deadline_date, formatted_date + weekend_note, days_until
 
 def is_year_optimized(year_data):
+    """
+    Returns True ONLY if:
+    1. Year has actual income data entered (t4_gross > 0 or other_income > 0)
+    2. Contribution rooms are set (rrsp_room > 0 and tfsa_room > 0)
+    3. Taxable income is below the Penthouse threshold ($181,440)
+    
+    A year with all zeros is 'Empty', not 'Optimized'.
+    This matches the same logic used in the Year View status card.
+    """
+    if not year_data:
+        return False
+    
+    t4_gross = year_data.get('t4_gross_income', 0)
+    other_inc = year_data.get('other_income', 0)
+    total_gross = t4_gross + other_inc
+    rrsp_room = year_data.get('rrsp_room', 0)
+    tfsa_room = year_data.get('tfsa_room', 0)
+    
+    # Must have income AND contribution rooms set — otherwise it's just "Empty"
+    planning_complete = (total_gross > 0) and (rrsp_room > 0) and (tfsa_room > 0)
+    if not planning_complete:
+        return False
+    
+    total_rrsp = calculate_annual_rrsp(year_data)
+    taxable_income = max(0, total_gross - total_rrsp)
+    return taxable_income <= 181440
+
+
+def has_year_data(year_data):
+    """Returns True if the year has any meaningful data entered (income > 0)"""
     if not year_data:
         return False
     t4_gross = year_data.get('t4_gross_income', 0)
     other_inc = year_data.get('other_income', 0)
-    total_gross = t4_gross + other_inc
-    total_rrsp = calculate_annual_rrsp(year_data)
-    taxable_income = max(0, total_gross - total_rrsp)
-    penthouse_threshold = 181440
-    return taxable_income <= penthouse_threshold
+    return (t4_gross + other_inc) > 0
 
 # ============================================================================
 # LOGIN/REGISTER PAGE
@@ -852,57 +1300,66 @@ def is_year_optimized(year_data):
 def show_auth_page():
     """Display professional institutional-grade login page"""
     
-    # Professional animated header
-    st.markdown(f"""
-        <style>
-        @keyframes float {{
-            0%, 100% {{ transform: translateY(0px); }}
-            50% {{ transform: translateY(-10px); }}
-        }}
-        .login-container {{
-            max-width: 650px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }}
-        .login-card {{
-            background: white;
-            padding: 48px 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e2e8f0;
-        }}
-        </style>
+    # AUTO-CREATE DEFAULT ADMIN if 'admin' user doesn't exist
+    try:
+        admin_check = execute_query(
+            "SELECT COUNT(*) as count FROM users WHERE username = 'admin'", 
+            show_error=False
+        )
         
-        <div style="text-align: center; padding: 60px 0 40px 0;">
-            <div style="font-size: 5em; margin-bottom: 20px; animation: float 3s ease-in-out infinite;">🏦</div>
-            <h1 style="font-size: 2.8em; font-weight: 800; color: #1e293b; margin-bottom: 12px; letter-spacing: -0.5px;">
+        if admin_check and admin_check[0]['count'] == 0:
+            admin_password = "admin123"
+            password_hash, salt = hash_password(admin_password)
+            execute_query("""
+                INSERT INTO users (username, email, password_hash, salt, role, is_active, created_at)
+                VALUES (%s, %s, %s, %s, 'admin', TRUE, %s)
+            """, ('admin', 'admin@taxoptimizer.local', password_hash, salt, datetime.now()), 
+            fetch=False, show_error=False)
+    except Exception:
+        pass
+    
+    # Professional centered header
+    st.markdown(f"""
+        <div style="text-align: center; padding: 50px 0 30px 0;">
+            <h1 style="font-size: 2.5em; font-weight: 800; color: #1e293b; margin-bottom: 10px; letter-spacing: -0.5px;">
                 {APP_NAME}
             </h1>
-            <p style="font-size: 1.15em; color: #64748b; font-weight: 500; margin-bottom: 10px;">
+            <p style="font-size: 1.1em; color: #64748b; font-weight: 500;">
                 {APP_SUBTITLE}
             </p>
         </div>
     """, unsafe_allow_html=True)
     
-    # Centered professional login card
-    col_left, col_center, col_right = st.columns([1, 2.5, 1])
+    # ── CONSTRAIN WIDTH: use 3-column layout so form sits in narrow centre column ──
+    col_left, col_center, col_right = st.columns([1, 1.4, 1])
     
     with col_center:
-        st.markdown('<div class="login-card">', unsafe_allow_html=True)
-        
         tab1, tab2 = st.tabs(["🔐 Sign In", "📝 Create Account"])
         
         # LOGIN TAB
         with tab1:
             st.markdown("### Sign In to Your Account")
+            st.markdown("")
             
             with st.form("login_form"):
-                username_or_email = st.text_input("Username or Email", placeholder="Enter your username or email")
-                password = st.text_input("Password", type="password", placeholder="Enter your password")
+                username_or_email = st.text_input(
+                    "Username or Email",
+                    placeholder="Enter your username or email",
+                    key="login_user"
+                )
+                password = st.text_input(
+                    "Password",
+                    type="password",
+                    placeholder="Enter your password",
+                    key="login_pass"
+                )
                 
-                col_btn1, col_btn2 = st.columns([1, 1])
-                with col_btn1:
-                    login_button = st.form_submit_button("🔐 Sign In", use_container_width=True, type="primary")
+                st.markdown("")
+                login_button = st.form_submit_button(
+                    "🔐 Sign In",
+                    use_container_width=True,
+                    type="primary"
+                )
                 
                 if login_button:
                     if not username_or_email or not password:
@@ -925,52 +1382,60 @@ def show_auth_page():
         # REGISTER TAB
         with tab2:
             st.markdown("### Create Your Account")
+            st.markdown("")
             
             with st.form("register_form"):
-                new_username = st.text_input("Username", placeholder="3-20 characters, letters and numbers")
-                new_email = st.text_input("Email Address", placeholder="your@email.com")
-                new_password = st.text_input("Password", type="password", placeholder="Minimum 8 characters")
-                confirm_password = st.text_input("Confirm Password", type="password", placeholder="Re-enter your password")
+                new_username = st.text_input(
+                    "Username",
+                    placeholder="3-20 characters, letters and numbers",
+                    key="reg_user"
+                )
+                new_email = st.text_input(
+                    "Email Address",
+                    placeholder="your@email.com",
+                    key="reg_email"
+                )
+                new_password = st.text_input(
+                    "Password",
+                    type="password",
+                    placeholder="Minimum 8 characters",
+                    key="reg_pass"
+                )
+                confirm_password = st.text_input(
+                    "Confirm Password",
+                    type="password",
+                    placeholder="Re-enter your password",
+                    key="reg_confirm"
+                )
                 
-                register_button = st.form_submit_button("✨ Create Account", 
-                                                        use_container_width=True, type="primary")
+                st.markdown("")
+                register_button = st.form_submit_button(
+                    "✨ Create Account",
+                    use_container_width=True,
+                    type="primary"
+                )
                 
                 if register_button:
-                    success, message = register_user(new_username, new_email, 
-                                                     new_password, confirm_password)
-                    
+                    success, message = register_user(new_username, new_email, new_password, confirm_password)
                     if success:
                         st.success(f"✅ {message}")
                         st.balloons()
                     else:
                         st.error(f"❌ {message}")
         
-        # First time setup help - Professional expandable section
+        # First time setup help — also inside the narrow column
+        st.markdown("")
         with st.expander("ℹ️ First time setup?", expanded=False):
-            st.markdown("""
-                <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); 
-                     padding: 24px; border-radius: 12px; border-left: 4px solid #3b82f6;">
-                    <h4 style="margin-top: 0; color: #1e3a8a;">Default Admin Account</h4>
-                    <p style="margin: 12px 0; color: #1e40af;">
-                        Use these credentials for first-time administrative access:
-                    </p>
-                    <div style="background: #f8fafc; padding: 16px; border-radius: 10px; 
-                         font-family: 'SF Mono', 'Monaco', 'Courier New', monospace; 
-                         margin: 12px 0; border: 1px solid #e2e8f0;">
-                        <div style="margin: 8px 0;"><strong>Username:</strong> <code style="background: #e0f2fe; padding: 4px 8px; border-radius: 4px;">admin</code></div>
-                        <div style="margin: 8px 0;"><strong>Password:</strong> <code style="background: #e0f2fe; padding: 4px 8px; border-radius: 4px;">admin123</code></div>
-                    </div>
-                    <div style="background: #fef3c7; padding: 12px; border-radius: 8px; border-left: 3px solid #f59e0b; margin-top: 16px;">
-                        <p style="margin: 0; color: #92400e; font-size: 0.95em;">
-                            <strong>⚠️ Security Notice:</strong> Change the admin password immediately after first login for security.
-                        </p>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+            st.info("""
+                **Default Admin Account:**
+                
+                Username: `admin`  
+                Password: `admin123`
+                
+                ⚠️ **Important:** Change the admin password immediately after first login.
+            """)
     
-    # Professional footer
+    # Footer — full width, centred
     st.markdown(f"""
         <div style="text-align: center; color: #94a3b8; font-size: 0.9em; margin-top: 60px; padding: 30px 20px;">
             <p style="font-weight: 600; color: #64748b; margin-bottom: 8px;">{APP_NAME} • {APP_VERSION}</p>
@@ -1114,7 +1579,7 @@ def show_admin_dashboard():
     st.divider()
     
     # TAB NAVIGATION (Matching Reference Image 2)
-    tab1, tab2, tab3 = st.tabs(["📊 All Users Overview", "👥 User Management", "📈 System Analytics"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 All Users Overview", "👥 User Management", "📈 System Analytics", "⚡ Power Tools"])
     
     with tab1:
         st.markdown("### 📊 All Users Overview")
@@ -1299,25 +1764,723 @@ def show_admin_dashboard():
             st.error(f"Error loading users: {e}")
     
     with tab3:
-        st.markdown("### 📈 System Analytics")
+        st.markdown("### 📈 System Analytics Dashboard")
+        st.caption("Comprehensive analytics and insights across all users and planning years")
+        
         st.markdown("")
         
-        st.info("📊 **Advanced analytics dashboard coming in future update**")
+        # =================================================================
+        # ANALYTICS FEATURE 1: User Activity Trends & Engagement Metrics
+        # =================================================================
+        
+        st.markdown("#### 📊 User Activity Trends & Engagement Metrics")
+        
+        try:
+            # Get user activity data
+            activity_query = """
+                SELECT 
+                    DATE(login_time) as date,
+                    COUNT(DISTINCT user_id) as active_users,
+                    COUNT(*) as total_logins,
+                    SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_logins
+                FROM login_history
+                WHERE login_time >= CURRENT_DATE - INTERVAL '30 days'
+                GROUP BY DATE(login_time)
+                ORDER BY date
+            """
+            activity_data = execute_query(activity_query)
+            
+            if activity_data and len(activity_data) > 0:
+                col_act1, col_act2, col_act3 = st.columns(3)
+                
+                # Calculate metrics
+                total_active_users = len(set([row['active_users'] for row in activity_data]))
+                total_logins_30d = sum([row['total_logins'] for row in activity_data])
+                avg_daily_logins = total_logins_30d / 30 if activity_data else 0
+                
+                with col_act1:
+                    st.metric("Active Users (30d)", total_active_users, 
+                             help="Unique users who logged in within last 30 days")
+                
+                with col_act2:
+                    st.metric("Total Logins (30d)", total_logins_30d,
+                             help="Total login attempts in last 30 days")
+                
+                with col_act3:
+                    st.metric("Avg Daily Logins", f"{avg_daily_logins:.1f}",
+                             help="Average logins per day over last 30 days")
+                
+                # Activity trend chart
+                df_activity = pd.DataFrame(activity_data)
+                df_activity['date'] = pd.to_datetime(df_activity['date'])
+                
+                activity_chart = alt.Chart(df_activity).mark_line(point=True, strokeWidth=3).encode(
+                    x=alt.X('date:T', title='Date', axis=alt.Axis(format='%b %d')),
+                    y=alt.Y('active_users:Q', title='Active Users'),
+                    tooltip=[
+                        alt.Tooltip('date:T', title='Date', format='%Y-%m-%d'),
+                        alt.Tooltip('active_users:Q', title='Active Users'),
+                        alt.Tooltip('total_logins:Q', title='Total Logins')
+                    ]
+                ).properties(
+                    height=300,
+                    title='Daily Active Users (Last 30 Days)'
+                )
+                
+                st.altair_chart(activity_chart, use_container_width=True)
+            else:
+                st.info("📊 No activity data available yet. Activity will be tracked as users login.")
+        
+        except Exception as e:
+            st.warning(f"Unable to load activity trends: {str(e)}")
+        
+        st.divider()
+        
+        # =================================================================
+        # ANALYTICS FEATURE 2: Aggregate Portfolio Value Growth Over Time
+        # =================================================================
+        
+        st.markdown("#### 💰 Aggregate Portfolio Value Growth Over Time")
+        
+        try:
+            # Get portfolio growth data
+            portfolio_query = """
+                SELECT 
+                    year,
+                    SUM(COALESCE((data->>'rrsp_balance_start')::numeric, 0)) as total_rrsp,
+                    SUM(COALESCE((data->>'tfsa_balance_start')::numeric, 0)) as total_tfsa,
+                    SUM(
+                        COALESCE((data->>'rrsp_balance_start')::numeric, 0) + 
+                        COALESCE((data->>'tfsa_balance_start')::numeric, 0)
+                    ) as total_aum
+                FROM tax_planning_years
+                GROUP BY year
+                ORDER BY year
+            """
+            portfolio_data = execute_query(portfolio_query)
+            
+            if portfolio_data and len(portfolio_data) > 0:
+                df_portfolio = pd.DataFrame(portfolio_data)
+                
+                # Summary metrics
+                latest_year = df_portfolio.iloc[-1]
+                total_aum = latest_year['total_aum']
+                total_rrsp = latest_year['total_rrsp']
+                total_tfsa = latest_year['total_tfsa']
+                
+                col_port1, col_port2, col_port3 = st.columns(3)
+                
+                with col_port1:
+                    st.metric("Total AUM", f"${total_aum:,.0f}",
+                             help="Total assets under management (RRSP + TFSA)")
+                
+                with col_port2:
+                    st.metric("Total RRSP", f"${total_rrsp:,.0f}",
+                             help="Combined RRSP balance across all users")
+                
+                with col_port3:
+                    st.metric("Total TFSA", f"${total_tfsa:,.0f}",
+                             help="Combined TFSA balance across all users")
+                
+                # Portfolio growth chart (stacked area)
+                df_melted = df_portfolio.melt(
+                    id_vars=['year'],
+                    value_vars=['total_rrsp', 'total_tfsa'],
+                    var_name='Account',
+                    value_name='Balance'
+                )
+                
+                df_melted['Account'] = df_melted['Account'].map({
+                    'total_rrsp': 'RRSP',
+                    'total_tfsa': 'TFSA'
+                })
+                
+                growth_chart = alt.Chart(df_melted).mark_area(opacity=0.7).encode(
+                    x=alt.X('year:O', title='Year'),
+                    y=alt.Y('Balance:Q', title='Portfolio Value ($)', stack='zero'),
+                    color=alt.Color('Account:N',
+                        scale=alt.Scale(
+                            domain=['RRSP', 'TFSA'],
+                            range=['#3b82f6', '#10b981']
+                        ),
+                        legend=alt.Legend(title='Account Type')
+                    ),
+                    tooltip=[
+                        alt.Tooltip('year:O', title='Year'),
+                        alt.Tooltip('Account:N', title='Account'),
+                        alt.Tooltip('Balance:Q', title='Balance', format='$,.0f')
+                    ]
+                ).properties(
+                    height=300,
+                    title='Portfolio Growth by Year'
+                )
+                
+                st.altair_chart(growth_chart, use_container_width=True)
+            else:
+                st.info("💰 No portfolio data available yet. Data will appear as users add planning years.")
+        
+        except Exception as e:
+            st.warning(f"Unable to load portfolio growth: {str(e)}")
+        
+        st.divider()
+        
+        # =================================================================
+        # ANALYTICS FEATURE 3: Tax Optimization Success Rate Tracking
+        # =================================================================
+        
+        st.markdown("#### 🎯 Tax Optimization Success Rate Tracking")
+        
+        try:
+            # Get optimization stats
+            optimization_query = """
+                SELECT 
+                    COUNT(*) as total_years,
+                    SUM(CASE 
+                        WHEN (
+                            COALESCE((data->>'t4_gross_income')::numeric, 0) + 
+                            COALESCE((data->>'other_income')::numeric, 0) -
+                            COALESCE((data->>'rrsp_lump_sum_optimization')::numeric, 0) - 
+                            COALESCE((data->>'rrsp_lump_sum_additional')::numeric, 0) -
+                            (COALESCE((data->>'base_salary')::numeric, 0) * 
+                             (COALESCE((data->>'biweekly_pct')::numeric, 0) + 
+                              COALESCE((data->>'employer_match')::numeric, 0)) / 100)
+                        ) < 181440 THEN 1 ELSE 0 
+                    END) as optimized_years,
+                    SUM(CASE 
+                        WHEN (
+                            COALESCE((data->>'t4_gross_income')::numeric, 0) + 
+                            COALESCE((data->>'other_income')::numeric, 0)
+                        ) > 0 THEN 1 ELSE 0
+                    END) as years_with_data
+                FROM tax_planning_years
+            """
+            opt_data = execute_query(optimization_query)
+            
+            if opt_data and opt_data[0]['total_years'] > 0:
+                total = opt_data[0]['total_years']
+                optimized = opt_data[0]['optimized_years']
+                with_data = opt_data[0]['years_with_data']
+                not_optimized = with_data - optimized
+                
+                success_rate = (optimized / with_data * 100) if with_data > 0 else 0
+                
+                col_opt1, col_opt2 = st.columns([1, 2])
+                
+                with col_opt1:
+                    # Success rate metrics
+                    st.metric("Optimization Success Rate", f"{success_rate:.1f}%",
+                             help="% of planning years below $181,440 Penthouse threshold")
+                    
+                    st.metric("Optimized Years", f"{optimized}/{with_data}",
+                             help="Years with taxable income below Penthouse threshold")
+                    
+                    st.metric("Need Optimization", not_optimized,
+                             help="Years with Penthouse exposure",
+                             delta=f"-{not_optimized} to optimize" if not_optimized > 0 else "All optimized!",
+                             delta_color="inverse" if not_optimized > 0 else "normal")
+                
+                with col_opt2:
+                    # Pie chart showing optimization breakdown
+                    opt_breakdown = pd.DataFrame({
+                        'Status': ['Optimized (Below $181,440)', 'Need Optimization (Above $181,440)'],
+                        'Count': [optimized, not_optimized],
+                        'Color': ['#10b981', '#ef4444']
+                    })
+                    
+                    pie_chart = alt.Chart(opt_breakdown).mark_arc(innerRadius=50).encode(
+                        theta=alt.Theta('Count:Q'),
+                        color=alt.Color('Status:N',
+                            scale=alt.Scale(
+                                domain=['Optimized (Below $181,440)', 'Need Optimization (Above $181,440)'],
+                                range=['#10b981', '#ef4444']
+                            ),
+                            legend=alt.Legend(title='Optimization Status')
+                        ),
+                        tooltip=[
+                            alt.Tooltip('Status:N', title='Status'),
+                            alt.Tooltip('Count:Q', title='Years'),
+                        ]
+                    ).properties(
+                        height=300,
+                        title='Tax Optimization Status Distribution'
+                    )
+                    
+                    st.altair_chart(pie_chart, use_container_width=True)
+            else:
+                st.info("🎯 No optimization data available yet.")
+        
+        except Exception as e:
+            st.warning(f"Unable to load optimization stats: {str(e)}")
+        
+        st.divider()
+        
+        # =================================================================
+        # ANALYTICS FEATURE 4: Average RRSP/TFSA Contribution Patterns
+        # =================================================================
+        
+        st.markdown("#### 📈 Average RRSP/TFSA Contribution Patterns")
+        
+        try:
+            # Get contribution patterns
+            contrib_query = """
+                SELECT 
+                    year,
+                    AVG(
+                        (COALESCE((data->>'base_salary')::numeric, 0) * 
+                         (COALESCE((data->>'biweekly_pct')::numeric, 0) + 
+                          COALESCE((data->>'employer_match')::numeric, 0)) / 100) +
+                        COALESCE((data->>'rrsp_lump_sum_optimization')::numeric, 0) +
+                        COALESCE((data->>'rrsp_lump_sum_additional')::numeric, 0)
+                    ) as avg_rrsp,
+                    AVG(COALESCE((data->>'tfsa_lump_sum')::numeric, 0)) as avg_tfsa,
+                    COUNT(*) as user_count
+                FROM tax_planning_years
+                WHERE COALESCE((data->>'t4_gross_income')::numeric, 0) > 0
+                GROUP BY year
+                ORDER BY year
+            """
+            contrib_data = execute_query(contrib_query)
+            
+            if contrib_data and len(contrib_data) > 0:
+                df_contrib = pd.DataFrame(contrib_data)
+                
+                # Summary stats
+                overall_avg_rrsp = df_contrib['avg_rrsp'].mean()
+                overall_avg_tfsa = df_contrib['avg_tfsa'].mean()
+                
+                col_contrib1, col_contrib2, col_contrib3 = st.columns(3)
+                
+                with col_contrib1:
+                    st.metric("Avg Annual RRSP", f"${overall_avg_rrsp:,.0f}",
+                             help="Average RRSP contribution across all users")
+                
+                with col_contrib2:
+                    st.metric("Avg Annual TFSA", f"${overall_avg_tfsa:,.0f}",
+                             help="Average TFSA contribution across all users")
+                
+                with col_contrib3:
+                    total_avg = overall_avg_rrsp + overall_avg_tfsa
+                    st.metric("Avg Total Contribution", f"${total_avg:,.0f}",
+                             help="Combined average RRSP + TFSA per user")
+                
+                # Contribution pattern chart (grouped bars)
+                df_melted = df_contrib.melt(
+                    id_vars=['year'],
+                    value_vars=['avg_rrsp', 'avg_tfsa'],
+                    var_name='Account',
+                    value_name='Amount'
+                )
+                
+                df_melted['Account'] = df_melted['Account'].map({
+                    'avg_rrsp': 'Average RRSP',
+                    'avg_tfsa': 'Average TFSA'
+                })
+                
+                contrib_chart = alt.Chart(df_melted).mark_bar(opacity=0.8).encode(
+                    x=alt.X('year:O', title='Year'),
+                    y=alt.Y('Amount:Q', title='Average Contribution ($)'),
+                    color=alt.Color('Account:N',
+                        scale=alt.Scale(
+                            domain=['Average RRSP', 'Average TFSA'],
+                            range=['#3b82f6', '#10b981']
+                        ),
+                        legend=alt.Legend(title='Account Type')
+                    ),
+                    xOffset='Account:N',
+                    tooltip=[
+                        alt.Tooltip('year:O', title='Year'),
+                        alt.Tooltip('Account:N', title='Account'),
+                        alt.Tooltip('Amount:Q', title='Amount', format='$,.0f')
+                    ]
+                ).properties(
+                    height=300,
+                    title='Average Contribution Patterns by Year'
+                )
+                
+                st.altair_chart(contrib_chart, use_container_width=True)
+            else:
+                st.info("📈 No contribution data available yet.")
+        
+        except Exception as e:
+            st.warning(f"Unable to load contribution patterns: {str(e)}")
+        
+        st.divider()
+        
+        # =================================================================
+        # ANALYTICS FEATURE 5: Users Approaching Contribution Limits
+        # =================================================================
+        
+        st.markdown("#### ⚠️ Users Approaching Contribution Limits")
+        
+        try:
+            # Get users near limits
+            limits_query = """
+                SELECT 
+                    u.username,
+                    t.year,
+                    COALESCE((t.data->>'rrsp_room')::numeric, 0) as rrsp_room,
+                    COALESCE((t.data->>'tfsa_room')::numeric, 0) as tfsa_room,
+                    (
+                        (COALESCE((t.data->>'base_salary')::numeric, 0) * 
+                         (COALESCE((t.data->>'biweekly_pct')::numeric, 0) + 
+                          COALESCE((t.data->>'employer_match')::numeric, 0)) / 100) +
+                        COALESCE((t.data->>'rrsp_lump_sum_optimization')::numeric, 0) +
+                        COALESCE((t.data->>'rrsp_lump_sum_additional')::numeric, 0)
+                    ) as rrsp_contrib,
+                    COALESCE((t.data->>'tfsa_lump_sum')::numeric, 0) as tfsa_contrib
+                FROM tax_planning_years t
+                JOIN users u ON t.user_id = u.user_id
+                WHERE COALESCE((t.data->>'rrsp_room')::numeric, 0) > 0
+                   OR COALESCE((t.data->>'tfsa_room')::numeric, 0) > 0
+                ORDER BY t.year DESC
+            """
+            limits_data = execute_query(limits_query)
+            
+            if limits_data and len(limits_data) > 0:
+                warnings_found = 0
+                
+                for user_data in limits_data:
+                    rrsp_room = user_data['rrsp_room']
+                    tfsa_room = user_data['tfsa_room']
+                    rrsp_contrib = user_data['rrsp_contrib']
+                    tfsa_contrib = user_data['tfsa_contrib']
+                    
+                    rrsp_remaining = rrsp_room - rrsp_contrib
+                    tfsa_remaining = tfsa_room - tfsa_contrib
+                    
+                    rrsp_util = (rrsp_contrib / rrsp_room * 100) if rrsp_room > 0 else 0
+                    tfsa_util = (tfsa_contrib / tfsa_room * 100) if tfsa_room > 0 else 0
+                    
+                    # Show warning if >90% utilized or over limit
+                    if (rrsp_util > 90 or rrsp_remaining < 0) or (tfsa_util > 90 or tfsa_remaining < 0):
+                        warnings_found += 1
+                        
+                        warning_type = "⚠️" if rrsp_remaining >= 0 and tfsa_remaining >= 0 else "🔴"
+                        
+                        st.markdown(f"""
+                            <div style="background: {'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' if rrsp_remaining >= 0 and tfsa_remaining >= 0 else 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)'}; 
+                                 padding: 16px; border-radius: 10px; margin-bottom: 12px; 
+                                 border-left: 4px solid {'#f59e0b' if rrsp_remaining >= 0 and tfsa_remaining >= 0 else '#ef4444'};">
+                                <strong>{warning_type} {user_data['username']} - {user_data['year']}</strong>
+                                <div style="margin-top: 8px; font-size: 0.95em;">
+                                    <strong>RRSP:</strong> ${rrsp_contrib:,.0f} / ${rrsp_room:,.0f} ({rrsp_util:.1f}% utilized) 
+                                    - <span style="color: {'#059669' if rrsp_remaining >= 0 else '#dc2626'};">${abs(rrsp_remaining):,.0f} {'remaining' if rrsp_remaining >= 0 else 'OVER LIMIT'}</span><br>
+                                    <strong>TFSA:</strong> ${tfsa_contrib:,.0f} / ${tfsa_room:,.0f} ({tfsa_util:.1f}% utilized) 
+                                    - <span style="color: {'#059669' if tfsa_remaining >= 0 else '#dc2626'};">${abs(tfsa_remaining):,.0f} {'remaining' if tfsa_remaining >= 0 else 'OVER LIMIT'}</span>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
+                if warnings_found == 0:
+                    st.success("✅ No users approaching contribution limits. All within safe ranges!")
+            else:
+                st.info("⚠️ No contribution data to analyze yet.")
+        
+        except Exception as e:
+            st.warning(f"Unable to check contribution limits: {str(e)}")
+        
+        st.divider()
+        
+        # =================================================================
+        # ANALYTICS FEATURE 6: Top Optimizers Leaderboard
+        # =================================================================
+        
+        st.markdown("#### 🏆 Top Optimizers Leaderboard")
+        
+        try:
+            # Get top optimizers
+            leaderboard_query = """
+                SELECT 
+                    u.username,
+                    COUNT(t.record_id) as total_years,
+                    SUM(CASE 
+                        WHEN (
+                            COALESCE((t.data->>'t4_gross_income')::numeric, 0) + 
+                            COALESCE((t.data->>'other_income')::numeric, 0) -
+                            COALESCE((t.data->>'rrsp_lump_sum_optimization')::numeric, 0) - 
+                            COALESCE((t.data->>'rrsp_lump_sum_additional')::numeric, 0) -
+                            (COALESCE((t.data->>'base_salary')::numeric, 0) * 
+                             (COALESCE((t.data->>'biweekly_pct')::numeric, 0) + 
+                              COALESCE((t.data->>'employer_match')::numeric, 0)) / 100)
+                        ) < 181440 THEN 1 ELSE 0 
+                    END) as optimized_years,
+                    SUM(
+                        (COALESCE((t.data->>'base_salary')::numeric, 0) * 
+                         (COALESCE((t.data->>'biweekly_pct')::numeric, 0) + 
+                          COALESCE((t.data->>'employer_match')::numeric, 0)) / 100) +
+                        COALESCE((t.data->>'rrsp_lump_sum_optimization')::numeric, 0) +
+                        COALESCE((t.data->>'rrsp_lump_sum_additional')::numeric, 0)
+                    ) as total_rrsp_contrib,
+                    SUM(COALESCE((t.data->>'tfsa_lump_sum')::numeric, 0)) as total_tfsa_contrib
+                FROM users u
+                LEFT JOIN tax_planning_years t ON u.user_id = t.user_id
+                WHERE t.record_id IS NOT NULL
+                GROUP BY u.username
+                HAVING COUNT(t.record_id) > 0
+                ORDER BY optimized_years DESC, total_rrsp_contrib DESC
+                LIMIT 10
+            """
+            leaderboard_data = execute_query(leaderboard_query)
+            
+            if leaderboard_data and len(leaderboard_data) > 0:
+                st.caption("Top 10 users by optimization success and contribution amounts")
+                
+                # Display leaderboard
+                for idx, user in enumerate(leaderboard_data, 1):
+                    opt_rate = (user['optimized_years'] / user['total_years'] * 100) if user['total_years'] > 0 else 0
+                    total_contrib = user['total_rrsp_contrib'] + user['total_tfsa_contrib']
+                    
+                    # Medal emoji
+                    medal = ""
+                    if idx == 1:
+                        medal = "🥇"
+                    elif idx == 2:
+                        medal = "🥈"
+                    elif idx == 3:
+                        medal = "🥉"
+                    else:
+                        medal = f"#{idx}"
+                    
+                    # Color based on rank
+                    if idx <= 3:
+                        bg_color = "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)"
+                        border_color = "#f59e0b"
+                    else:
+                        bg_color = "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)"
+                        border_color = "#3b82f6"
+                    
+                    st.markdown(f"""
+                        <div style="background: {bg_color}; 
+                             padding: 16px 20px; border-radius: 10px; margin-bottom: 10px; 
+                             border-left: 4px solid {border_color}; display: flex; align-items: center;">
+                            <div style="font-size: 1.5em; margin-right: 16px; min-width: 50px;">{medal}</div>
+                            <div style="flex: 1;">
+                                <strong style="font-size: 1.1em;">{user['username']}</strong>
+                                <div style="margin-top: 4px; font-size: 0.9em;">
+                                    <strong>Optimization:</strong> {user['optimized_years']}/{user['total_years']} years ({opt_rate:.1f}%) • 
+                                    <strong>Total Contributions:</strong> ${total_contrib:,.0f} 
+                                    (RRSP: ${user['total_rrsp_contrib']:,.0f}, TFSA: ${user['total_tfsa_contrib']:,.0f})
+                                </div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("🏆 Leaderboard will populate as users create planning years.")
+        
+        except Exception as e:
+            st.warning(f"Unable to load leaderboard: {str(e)}")
+    
+    # =================================================================
+    # TAB 4: POWER TOOLS (Admin Only)
+    # =================================================================
+    
+    with tab4:
+        st.markdown("### ⚡ Admin Power Tools")
+        st.caption("Advanced administrative functions - use with caution")
+        
+        st.markdown("")
+        
+        # TOOL 1: Login as User (Impersonation)
+        st.markdown("#### 🔐 Login as User (Impersonation)")
         
         st.markdown("""
-            <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); 
-                 padding: 24px; border-radius: 12px; border-left: 4px solid #3b82f6; margin-top: 20px;">
-                <h4 style="margin-top: 0; color: #1e3a8a;">Planned Analytics Features:</h4>
-                <ul style="color: #1e40af; line-height: 1.8;">
-                    <li>📊 User activity trends and engagement metrics</li>
-                    <li>💰 Aggregate portfolio value growth over time</li>
-                    <li>🎯 Tax optimization success rate tracking</li>
-                    <li>📈 Average RRSP/TFSA contribution patterns</li>
-                    <li>⚠️ Users approaching contribution limits</li>
-                    <li>🏆 Top optimizers leaderboard</li>
-                </ul>
+            <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); 
+                 padding: 20px; border-radius: 10px; border-left: 4px solid #3b82f6; margin-bottom: 20px;">
+                <h4 style="margin-top: 0; color: #1e3a8a;">Impersonate User Account</h4>
+                <p style="color: #1e40af; margin-bottom: 0;">
+                    Login as any user to view their account, planning years, and data. 
+                    All actions will be performed as that user. Use this for support and troubleshooting.
+                </p>
             </div>
         """, unsafe_allow_html=True)
+        
+        # Get all users
+        all_users_query = "SELECT user_id, username, email, role FROM users ORDER BY username"
+        all_users = execute_query(all_users_query)
+        
+        if all_users:
+            col_imp1, col_imp2 = st.columns([2, 1])
+            
+            with col_imp1:
+                user_options = [f"{u['username']} ({u['email']}) - {u['role'].upper()}" for u in all_users]
+                selected_user_idx = st.selectbox(
+                    "Select User to Impersonate",
+                    range(len(user_options)),
+                    format_func=lambda i: user_options[i],
+                    key="impersonate_user_select"
+                )
+                
+                selected_user = all_users[selected_user_idx]
+            
+            with col_imp2:
+                st.markdown("")
+                st.markdown("")
+                if st.button("🔐 Login as This User", type="primary", use_container_width=True, key="impersonate_btn"):
+                    # Save original admin session
+                    if 'original_admin_id' not in st.session_state:
+                        st.session_state.original_admin_id = st.session_state.user_id
+                        st.session_state.original_admin_username = st.session_state.username
+                    
+                    # Switch to target user
+                    st.session_state.user_id = selected_user['user_id']
+                    st.session_state.username = selected_user['username']
+                    st.session_state.email = selected_user['email']
+                    st.session_state.role = selected_user['role']
+                    st.session_state.impersonating = True
+                    
+                    st.success(f"✅ Now logged in as **{selected_user['username']}**")
+                    st.info("👑 You are impersonating this user. Click 'Return to Admin' in sidebar to switch back.")
+                    st.rerun()
+        
+        # Show return button if impersonating
+        if st.session_state.get('impersonating', False):
+            st.markdown("")
+            if st.button("👑 Return to Admin Account", type="secondary", use_container_width=True, key="return_admin_btn"):
+                # Restore admin session
+                st.session_state.user_id = st.session_state.original_admin_id
+                st.session_state.username = st.session_state.original_admin_username
+                st.session_state.role = 'admin'
+                st.session_state.impersonating = False
+                
+                # Clean up
+                del st.session_state.original_admin_id
+                del st.session_state.original_admin_username
+                
+                st.success("✅ Returned to admin account")
+                st.rerun()
+        
+        st.divider()
+        
+        # TOOL 2: Reset User Data
+        st.markdown("#### 🔄 Reset User Data")
+        
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); 
+                 padding: 20px; border-radius: 10px; border-left: 4px solid #f59e0b; margin-bottom: 20px;">
+                <h4 style="margin-top: 0; color: #78350f;">Delete All Planning Years</h4>
+                <p style="color: #92400e; margin-bottom: 0;">
+                    ⚠️ This will permanently delete ALL planning years for the selected user. 
+                    The user account will remain, but all their financial data will be erased.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        col_reset1, col_reset2 = st.columns([2, 1])
+        
+        with col_reset1:
+            if all_users:
+                user_reset_idx = st.selectbox(
+                    "Select User to Reset",
+                    range(len(user_options)),
+                    format_func=lambda i: user_options[i],
+                    key="reset_user_select"
+                )
+                
+                user_to_reset = all_users[user_reset_idx]
+                
+                # Get user's planning year count
+                count_query = "SELECT COUNT(*) as count FROM tax_planning_years WHERE user_id = %s"
+                count_result = execute_query(count_query, (user_to_reset['user_id'],))
+                year_count = count_result[0]['count'] if count_result else 0
+                
+                st.caption(f"📊 This user has **{year_count}** planning years")
+        
+        with col_reset2:
+            st.markdown("")
+            st.markdown("")
+            if st.button("🔄 Reset User Data", type="secondary", use_container_width=True, key="reset_user_btn"):
+                if year_count > 0:
+                    # Confirmation dialog
+                    st.session_state.confirm_reset_user = user_to_reset['user_id']
+                    st.warning(f"⚠️ **Confirm:** Delete {year_count} planning years for **{user_to_reset['username']}**?")
+                else:
+                    st.info("This user has no planning years to delete")
+        
+        # Show confirmation buttons if pending
+        if st.session_state.get('confirm_reset_user'):
+            col_confirm1, col_confirm2 = st.columns(2)
+            
+            with col_confirm1:
+                if st.button("✅ YES, DELETE ALL DATA", type="primary", use_container_width=True, key="confirm_yes_reset"):
+                    user_id_to_reset = st.session_state.confirm_reset_user
+                    
+                    # Delete user's planning years
+                    execute_query(
+                        "DELETE FROM tax_planning_years WHERE user_id = %s",
+                        (user_id_to_reset,),
+                        fetch=False
+                    )
+                    
+                    st.success(f"✅ Successfully deleted all planning years for user")
+                    del st.session_state.confirm_reset_user
+                    st.rerun()
+            
+            with col_confirm2:
+                if st.button("❌ Cancel", use_container_width=True, key="confirm_no_reset"):
+                    del st.session_state.confirm_reset_user
+                    st.rerun()
+        
+        st.divider()
+        
+        # TOOL 3: Nuclear Database Reset
+        st.markdown("#### 💣 Nuclear Database Reset")
+        
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); 
+                 padding: 20px; border-radius: 10px; border-left: 4px solid #ef4444; margin-bottom: 20px;">
+                <h4 style="margin-top: 0; color: #7f1d1d;">🚨 DANGER ZONE</h4>
+                <p style="color: #991b1b; margin-bottom: 0;">
+                    <strong>⚠️ CRITICAL WARNING:</strong> This will permanently delete ALL data from ALL tables 
+                    (except admin accounts). All users, planning years, sessions, and analytics will be erased. 
+                    This action is IRREVERSIBLE.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Nuclear reset controls
+        nuclear_confirm = st.checkbox("I understand this will delete ALL data", key="nuclear_checkbox")
+        
+        if nuclear_confirm:
+            nuclear_text = st.text_input(
+                "Type 'DELETE EVERYTHING' to confirm",
+                key="nuclear_text_confirm"
+            )
+            
+            if nuclear_text == "DELETE EVERYTHING":
+                col_nuke1, col_nuke2 = st.columns([1, 1])
+                
+                with col_nuke1:
+                    if st.button("💣 NUCLEAR RESET DATABASE", type="primary", use_container_width=True, key="nuclear_btn"):
+                        st.session_state.nuclear_armed = True
+                        st.error("⚠️ **FINAL WARNING:** Are you absolutely sure?")
+                
+                # Final confirmation
+                if st.session_state.get('nuclear_armed', False):
+                    col_final1, col_final2 = st.columns(2)
+                    
+                    with col_final1:
+                        if st.button("🔴 YES, DELETE EVERYTHING", type="primary", use_container_width=True, key="nuclear_confirm_yes"):
+                            try:
+                                # Delete all data (preserve admin users)
+                                execute_query("DELETE FROM tax_planning_years", fetch=False)
+                                execute_query("DELETE FROM login_history", fetch=False)
+                                execute_query("DELETE FROM user_sessions", fetch=False)
+                                execute_query("DELETE FROM admin_audit_log", fetch=False)
+                                execute_query("DELETE FROM password_reset_tokens", fetch=False)
+                                execute_query("DELETE FROM email_verification_tokens", fetch=False)
+                                execute_query("DELETE FROM users WHERE role != 'admin'", fetch=False)
+                                
+                                st.success("✅ Nuclear reset complete! All non-admin data deleted.")
+                                del st.session_state.nuclear_armed
+                                st.balloons()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Nuclear reset failed: {str(e)}")
+                    
+                    with col_final2:
+                        if st.button("❌ Cancel", use_container_width=True, key="nuclear_confirm_no"):
+                            del st.session_state.nuclear_armed
+                            st.rerun()
 
 # ============================================================================
 # USER PROFILE PAGE
@@ -1408,8 +2571,25 @@ all_history = load_all_data(st.session_state.user_id)
 
 # Sidebar navigation
 with st.sidebar:
-    st.markdown(f"### 👤 {st.session_state.username}")
-    st.caption(f"Role: {st.session_state.role.upper()}")
+    # User info with app branding
+    st.markdown(f"""
+        <div style="text-align: center; padding: 12px 0; margin-bottom: 8px;">
+            <div style="font-size: 1.3em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                👤 {st.session_state.username}
+            </div>
+            <div style="font-size: 0.8em; color: #64748b; margin-bottom: 8px;">
+                Role: {st.session_state.role.upper()}
+            </div>
+            <div style="border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 8px;">
+                <div style="font-size: 0.85em; font-weight: 600; color: #3b82f6;">
+                    📊 {APP_NAME}
+                </div>
+                <div style="font-size: 0.75em; color: #94a3b8;">
+                    v{APP_VERSION.split(' - ')[0]} • {APP_DATE.split(',')[0].split()[-1]}, {APP_DATE.split()[-1]}
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
     
     st.divider()
     
@@ -1421,6 +2601,10 @@ with st.sidebar:
     
     if st.button("👤 Profile Settings", use_container_width=True, key="main_profile_btn"):
         st.session_state.current_page = "Profile"
+        st.rerun()
+    
+    if st.button("ℹ️ Version Info", use_container_width=True, key="main_version_btn"):
+        st.session_state.current_page = "Version"
         st.rerun()
     
     if st.button("🚪 Logout", use_container_width=True, type="secondary", key="main_logout_btn"):
@@ -1446,6 +2630,147 @@ if st.session_state.current_page == "Admin":
 # Show profile page if selected
 if st.session_state.current_page == "Profile":
     show_profile_page()
+    st.stop()
+
+# Show version info page if selected
+if st.session_state.current_page == "Version":
+    # Version Info Page
+    with st.sidebar:
+        if st.button("⬅️ Back to App", use_container_width=True, key="version_back_btn"):
+            st.session_state.current_page = "Home"
+            st.rerun()
+    
+    st.title(f"ℹ️ {APP_NAME} - Version Info")
+    
+    # Current Version Banner
+    st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+             color: white; padding: 40px; border-radius: 16px; text-align: center; margin-bottom: 30px;
+             box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);">
+            <h1 style="margin: 0; font-size: 3em;">🏦</h1>
+            <h2 style="margin: 20px 0 10px 0; font-size: 2em;">{APP_NAME}</h2>
+            <p style="font-size: 1.2em; opacity: 0.9; margin: 0;">{APP_SUBTITLE}</p>
+            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px; margin-top: 25px;">
+                <p style="font-size: 1.5em; font-weight: 700; margin: 0;">{APP_VERSION}</p>
+                <p style="font-size: 0.9em; margin: 5px 0 0 0; opacity: 0.9;">Released: {APP_DATE}</p>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Feature Highlights
+    st.markdown("## ✨ Feature Highlights")
+    
+    col_feat1, col_feat2, col_feat3 = st.columns(3)
+    
+    with col_feat1:
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); 
+                 padding: 24px; border-radius: 12px; height: 100%; border-left: 4px solid #3b82f6;">
+                <h3 style="color: #1e3a8a; margin-top: 0;">📊 Analytics</h3>
+                <ul style="color: #1e40af; line-height: 1.8;">
+                    <li>6 Analytics Modules</li>
+                    <li>User Activity Tracking</li>
+                    <li>Portfolio Growth Charts</li>
+                    <li>Optimization Success Rates</li>
+                    <li>Top Performers Leaderboard</li>
+                </ul>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col_feat2:
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); 
+                 padding: 24px; border-radius: 12px; height: 100%; border-left: 4px solid #10b981;">
+                <h3 style="color: #065f46; margin-top: 0;">👑 Admin Tools</h3>
+                <ul style="color: #047857; line-height: 1.8;">
+                    <li>User Impersonation</li>
+                    <li>Reset User Data</li>
+                    <li>Nuclear Database Reset</li>
+                    <li>4 Colored Metric Cards</li>
+                    <li>Enhanced Management</li>
+                </ul>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col_feat3:
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); 
+                 padding: 24px; border-radius: 12px; height: 100%; border-left: 4px solid #f59e0b;">
+                <h3 style="color: #78350f; margin-top: 0;">📧 Notifications</h3>
+                <ul style="color: #92400e; line-height: 1.8;">
+                    <li>Welcome Emails</li>
+                    <li>Optimization Alerts</li>
+                    <li>Deadline Reminders</li>
+                    <li>Limit Warnings</li>
+                    <li>SMTP Integration</li>
+                </ul>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("")
+    st.markdown("")
+    
+    # Full Changelog
+    st.markdown("## 📝 Complete Changelog")
+    
+    with st.expander("📜 View Full Version History", expanded=True):
+        st.markdown(CHANGELOG)
+    
+    st.divider()
+    
+    # Technical Info
+    st.markdown("## 🔧 Technical Information")
+    
+    col_tech1, col_tech2 = st.columns(2)
+    
+    with col_tech1:
+        st.markdown("""
+            **Platform Stack:**
+            - Frontend: Streamlit
+            - Database: PostgreSQL
+            - Charts: Altair
+            - Email: SMTP
+            - Authentication: Session-based
+            - Deployment: Streamlit Cloud
+        """)
+    
+    with col_tech2:
+        st.markdown("""
+            **Key Features:**
+            - Multi-user authentication
+            - Auto-migration database
+            - Real-time tax calculations
+            - Multi-year planning
+            - Portfolio tracking
+            - Admin power tools
+        """)
+    
+    st.divider()
+    
+    # Credits
+    st.markdown("## 💙 Credits & Support")
+    
+    st.info("""
+        **Built for Canadian Taxpayers**
+        
+        This application is designed to help Canadians optimize their RRSP and TFSA contributions,
+        minimize taxes, and plan for a secure financial future.
+        
+        Tax rates are based on 2025/2026 Ontario (Federal + Provincial) brackets.
+        Always consult with a qualified tax professional for personalized advice.
+    """)
+    
+    st.markdown("""
+        <div style="text-align: center; margin-top: 40px; padding: 30px; background: #f8fafc; border-radius: 12px;">
+            <p style="font-size: 1.1em; color: #64748b; margin: 0;">
+                <strong>Canadian Tax Optimizer</strong> • Built with ❤️ for Canadian taxpayers
+            </p>
+            <p style="font-size: 0.9em; color: #94a3b8; margin-top: 10px;">
+                {APP_VERSION} • {APP_DATE}
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    
     st.stop()
 
 # Otherwise, show main app (Home or Year View)
@@ -1477,6 +2802,216 @@ if st.session_state.current_page == "Home":
         - 🟠 **Orange** = In Progress (needs more RRSP contributions)
         - ⚪ **Gray** = Not Started (no data entered yet)
         """)
+    
+    # ===================================================================
+    # QUICK STATS CARDS - NEW FEATURE
+    # ===================================================================
+    
+    if all_history:
+        st.markdown("## ⚡ Quick Stats Overview")
+        st.caption("Your lifetime tax optimization and contribution summary")
+        st.markdown("")
+        
+        # Calculate quick stats
+        quick_total_rrsp = 0
+        quick_total_tfsa = 0
+        quick_total_tax_saved = 0
+        quick_total_years = 0      # Only count years with actual data
+        quick_optimized_years = 0
+        
+        for yr, data in all_history.items():
+            t4_gross = data.get('t4_gross_income', 0)
+            other_inc = data.get('other_income', 0)
+            total_gross = t4_gross + other_inc
+            
+            annual_rrsp = calculate_annual_rrsp(data)
+            tfsa_contrib = data.get('tfsa_lump_sum', 0)
+            
+            quick_total_rrsp += annual_rrsp
+            quick_total_tfsa += tfsa_contrib
+            
+            refund = calculate_tax_refund(total_gross, annual_rrsp)
+            quick_total_tax_saved += refund
+            
+            # Only count years with real income data
+            if total_gross > 0:
+                quick_total_years += 1
+                # Use same consistent logic as is_year_optimized()
+                if is_year_optimized(data):
+                    quick_optimized_years += 1
+        
+        quick_total_contrib = quick_total_rrsp + quick_total_tfsa
+        quick_opt_rate = (quick_optimized_years / quick_total_years * 100) if quick_total_years > 0 else 0
+        
+        # Display Quick Stats Cards
+        col_q1, col_q2, col_q3, col_q4 = st.columns(4)
+        
+        with col_q1:
+            st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
+                     color: white; padding: 24px; border-radius: 12px; text-align: center;
+                     box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);">
+                    <div style="font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;">💰 Total Tax Saved</div>
+                    <div style="font-size: 2.2em; font-weight: 700;">${quick_total_tax_saved:,.0f}</div>
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">Lifetime Refunds</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col_q2:
+            st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
+                     color: white; padding: 24px; border-radius: 12px; text-align: center;
+                     box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);">
+                    <div style="font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;">💼 Total Contributions</div>
+                    <div style="font-size: 2.2em; font-weight: 700;">${quick_total_contrib:,.0f}</div>
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">RRSP + TFSA Combined</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col_q3:
+            st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); 
+                     color: white; padding: 24px; border-radius: 12px; text-align: center;
+                     box-shadow: 0 4px 6px rgba(139, 92, 246, 0.3);">
+                    <div style="font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;">🎯 Optimization Rate</div>
+                    <div style="font-size: 2.2em; font-weight: 700;">{quick_opt_rate:.0f}%</div>
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">{quick_optimized_years}/{quick_total_years} Years Optimized</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col_q4:
+            # Get latest portfolio value
+            latest_year_key = max(all_history.keys(), key=lambda x: int(x))
+            latest = all_history[latest_year_key]
+            latest_cagr = latest.get("target_cagr", 7.0) / 100
+            latest_rrsp_start = latest.get("rrsp_balance_start", 0)
+            latest_tfsa_start = latest.get("tfsa_balance_start", 0)
+            latest_rrsp_contrib = calculate_annual_rrsp(latest)
+            latest_tfsa_contrib = latest.get('tfsa_lump_sum', 0)
+            
+            latest_rrsp_end = latest_rrsp_start * (1 + latest_cagr) + latest_rrsp_contrib * (1 + latest_cagr/2)
+            latest_tfsa_end = latest_tfsa_start * (1 + latest_cagr) + latest_tfsa_contrib * (1 + latest_cagr/2)
+            quick_portfolio_value = latest_rrsp_end + latest_tfsa_end
+            
+            st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                     color: white; padding: 24px; border-radius: 12px; text-align: center;
+                     box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
+                    <div style="font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;">📊 Portfolio Value</div>
+                    <div style="font-size: 2.2em; font-weight: 700;">${quick_portfolio_value:,.0f}</div>
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">As of {latest_year_key}</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("")
+        st.markdown("")
+        
+        # ===================================================================
+        # CONTRIBUTION PROGRESS BARS - Shows CURRENT YEAR (2026)
+        # ===================================================================
+        
+        st.markdown("### 📊 Contribution Room Utilization")
+        st.caption(f"Visual overview of your {datetime.now().year} contribution space usage")
+        st.markdown("")
+        
+        # Get CURRENT YEAR data (2026) for progress bars
+        current_year = str(datetime.now().year)
+        current_year_data = all_history.get(current_year, None)
+        
+        if current_year_data:
+            rrsp_room = current_year_data.get('rrsp_room', 0)
+            tfsa_room = current_year_data.get('tfsa_room', 0)
+            
+            rrsp_used = calculate_annual_rrsp(current_year_data)
+            tfsa_used = current_year_data.get('tfsa_lump_sum', 0)
+            
+            rrsp_remaining = max(0, rrsp_room - rrsp_used)
+            tfsa_remaining = max(0, tfsa_room - tfsa_used)
+            
+            rrsp_pct = (rrsp_used / rrsp_room * 100) if rrsp_room > 0 else 0
+            tfsa_pct = (tfsa_used / tfsa_room * 100) if tfsa_room > 0 else 0
+            
+            # RRSP Progress Bar
+            col_pb1, col_pb2 = st.columns([3, 1])
+            
+            with col_pb1:
+                st.markdown("**RRSP Contribution Room**")
+                
+                # Determine color based on utilization
+                if rrsp_pct >= 90:
+                    rrsp_color = "#10b981"  # Green - well utilized
+                elif rrsp_pct >= 60:
+                    rrsp_color = "#3b82f6"  # Blue - moderate
+                else:
+                    rrsp_color = "#94a3b8"  # Gray - underutilized
+                
+                st.markdown(f"""
+                    <div style="background: #f1f5f9; border-radius: 10px; padding: 3px; margin-bottom: 8px;">
+                        <div style="background: {rrsp_color}; width: {min(rrsp_pct, 100):.1f}%; 
+                             height: 30px; border-radius: 8px; display: flex; align-items: center; 
+                             justify-content: center; color: white; font-weight: 600; font-size: 0.9em;">
+                            {rrsp_pct:.1f}%
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                st.caption(f"Used: ${rrsp_used:,.0f} / ${rrsp_room:,.0f} • Remaining: ${rrsp_remaining:,.0f}")
+            
+            with col_pb2:
+                st.metric(
+                    "Room Status",
+                    f"{rrsp_pct:.0f}%",
+                    delta=f"${rrsp_remaining:,.0f} left",
+                    delta_color="inverse" if rrsp_pct < 80 else "normal"
+                )
+            
+            st.markdown("")
+            
+            # TFSA Progress Bar
+            col_pb3, col_pb4 = st.columns([3, 1])
+            
+            with col_pb3:
+                st.markdown("**TFSA Contribution Room**")
+                
+                # Determine color based on utilization
+                if tfsa_pct >= 90:
+                    tfsa_color = "#10b981"  # Green - well utilized
+                elif tfsa_pct >= 60:
+                    tfsa_color = "#3b82f6"  # Blue - moderate
+                else:
+                    tfsa_color = "#94a3b8"  # Gray - underutilized
+                
+                st.markdown(f"""
+                    <div style="background: #f1f5f9; border-radius: 10px; padding: 3px; margin-bottom: 8px;">
+                        <div style="background: {tfsa_color}; width: {min(tfsa_pct, 100):.1f}%; 
+                             height: 30px; border-radius: 8px; display: flex; align-items: center; 
+                             justify-content: center; color: white; font-weight: 600; font-size: 0.9em;">
+                            {tfsa_pct:.1f}%
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                st.caption(f"Used: ${tfsa_used:,.0f} / ${tfsa_room:,.0f} • Remaining: ${tfsa_remaining:,.0f}")
+            
+            with col_pb4:
+                st.metric(
+                    "Room Status",
+                    f"{tfsa_pct:.0f}%",
+                    delta=f"${tfsa_remaining:,.0f} left",
+                    delta_color="inverse" if tfsa_pct < 80 else "normal"
+                )
+            
+            # Show which year is displayed
+            st.caption(f"💡 Showing {current_year} contribution data. [Click any year below to view/edit that year's plan]")
+        else:
+            # Current year not found — show message
+            st.info(f"""
+                📅 **No data for {current_year} yet.**
+                
+                Click "➕ Add Year" below to create a {current_year} tax plan, or select an existing year to view its progress.
+            """)
+        
+        st.divider()
     
     # SECTION 1: GLOBAL WEALTH SUMMARY (Moved to Top)
     if all_history:
@@ -2046,7 +3581,7 @@ if st.session_state.current_page == "Home":
         if st.button("➕ Add Year", use_container_width=True, type="primary"):
             if str(new_year_input) not in all_history:
                 # Create empty year entry
-                save_year_data(new_year_input, {
+                save_year_data(st.session_state.user_id, new_year_input, {
                     "t4_gross_income": 0,
                     "other_income": 0,
                     "base_salary": 0,
@@ -2059,7 +3594,14 @@ if st.session_state.current_page == "Home":
                     "tfsa_room": 0,
                     "rrsp_balance_start": 0,
                     "tfsa_balance_start": 0,
-                    "target_cagr": 7.0
+                    "target_cagr": 7.0,
+                    "spouse_name": "",
+                    "spousal_rrsp_contribution": 0,
+                    "spouse_rrsp_balance_start": 0,
+                    "spouse_gross_income": 0,
+                    "spouse_age": 0,
+                    "spouse_rrsp_room": 0,
+                    "last_spousal_contribution_year": 0
                 })
                 st.success(f"✓ Year {new_year_input} added successfully!")
                 st.rerun()
@@ -2102,27 +3644,33 @@ if st.session_state.current_page == "Home":
         for i, yr in enumerate(years_to_show[row_start:row_start + cols_per_row]):
             with cols[i]:
                 is_saved = str(yr) in all_history
-                is_optimized = is_year_optimized(all_history.get(str(yr), {})) if is_saved else False
+                year_data_entry = all_history.get(str(yr), {})
                 
-                # Determine status and styling
-                if not is_saved:
-                    # Gray/Slate - Empty
+                # Use consistent status logic:
+                # - Not saved       → gray "Empty" (never created)
+                # - Saved, no income → gray "Empty" (created but no data)
+                # - Saved, has income, above threshold → orange "In Progress"
+                # - Saved, has income, below threshold → green "Optimized"
+                
+                is_optimized = is_year_optimized(year_data_entry) if is_saved else False
+                has_data = has_year_data(year_data_entry) if is_saved else False
+                
+                if not is_saved or not has_data:
+                    # Gray - Empty (not started or saved with zero income)
                     status_emoji = "⚪"
                     status_text = "Empty"
                     button_label = f"📅 **{yr}**\n{status_emoji} {status_text}"
                     container_style = "background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border: 2px solid #94a3b8; border-radius: 12px; padding: 4px;"
                 elif is_optimized:
                     # Green - Optimized
-                    data = all_history[str(yr)]
-                    annual_rrsp = calculate_annual_rrsp(data)
+                    annual_rrsp = calculate_annual_rrsp(year_data_entry)
                     status_emoji = "🟢"
                     status_text = f"${annual_rrsp:,.0f}"
                     button_label = f"📅 **{yr}**\n{status_text}\n{status_emoji} Optimized"
                     container_style = "background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border: 2px solid #10b981; border-radius: 12px; padding: 4px;"
                 else:
                     # Orange - In Progress
-                    data = all_history[str(yr)]
-                    annual_rrsp = calculate_annual_rrsp(data)
+                    annual_rrsp = calculate_annual_rrsp(year_data_entry)
                     status_emoji = "🟠"
                     status_text = f"${annual_rrsp:,.0f}"
                     button_label = f"📅 **{yr}**\n{status_text}\n{status_emoji} In Progress"
@@ -2518,6 +4066,47 @@ else:
             st.session_state.current_page = "Home"
             st.rerun()
         
+        # ═══════════════════════════════════════════════════════════════
+        # APP BRANDING & VERSION INFO
+        # ═══════════════════════════════════════════════════════════════
+        st.markdown("")
+        
+        # User role badge
+        user_role = st.session_state.get('role', 'USER')
+        if user_role == 'ADMIN':
+            st.markdown("""
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                     padding: 10px 16px; border-radius: 8px; text-align: center; margin-bottom: 16px;">
+                    <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # App branding
+        st.markdown(f"""
+            <div style="text-align: center; margin: 20px 0;">
+                <h3 style="margin: 0; color: #1e293b; font-size: 1.1em; font-weight: 600;">
+                    📊 {APP_NAME}
+                </h3>
+                <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.8em;">
+                    {APP_SUBTITLE}
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Version Info - Collapsible
+        with st.expander("ℹ️ Version Info", expanded=False):
+            st.markdown(f"""
+                **Version:** {APP_VERSION.split(' - ')[0]}  
+                **Released:** {APP_DATE}  
+                **Build:** {APP_VERSION.split(' - ')[1] if ' - ' in APP_VERSION else 'Production'}
+            """)
+            
+            if st.button("📋 View Changelog", use_container_width=True, key="sidebar_changelog"):
+                st.session_state.current_page = "Version Info"
+                st.rerun()
+        
+        st.markdown("---")
+        
         st.header(f"⚙️ {selected_year} Parameters")
         
         with st.form(key="input_form"):
@@ -2609,7 +4198,7 @@ else:
                 help="Tax-free savings account contribution"
             )
             
-            st.markdown("### 📋 CRA Contribution Limits")
+            st.markdown("### 📋 Your CRA Contribution Limits")
             
             # Get default values from previous year if available
             prev_year = str(selected_year - 1)
@@ -2638,15 +4227,15 @@ else:
                 default_tfsa_room = prev_tfsa_room_remaining + new_tfsa_room
             
             rrsp_room = st.number_input(
-                "Available RRSP Room",
+                "Your RRSP Room",
                 value=float(year_data.get("rrsp_room", default_rrsp_room)),
                 step=1000.0,
                 min_value=0.0,
-                help="From your latest Notice of Assessment (auto-filled from previous year if available)"
+                help="From YOUR Notice of Assessment. This room can be used for YOUR personal RRSP OR for spousal RRSP contributions."
             )
             
             tfsa_room = st.number_input(
-                "Available TFSA Room",
+                "Your TFSA Room",
                 value=float(year_data.get("tfsa_room", default_tfsa_room)),
                 step=1000.0,
                 min_value=0.0,
@@ -2655,6 +4244,48 @@ else:
             
             if prev_year in all_history and default_rrsp_room > 0:
                 st.caption(f"ℹ️ Auto-calculated from {prev_year} carryover + new room")
+            
+            # Show YOUR personal RRSP room usage (before spousal)
+            if rrsp_room > 0:
+                _biweekly_total = (
+                    base_salary * (biweekly_pct / 100) +
+                    base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+                )
+                _personal_lump = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
+                _personal_rrsp_only = _biweekly_total + _personal_lump
+                _personal_remaining = rrsp_room - _personal_rrsp_only
+                
+                st.markdown("**Your Personal RRSP Room Usage**")
+                col_yr1, col_yr2 = st.columns(2)
+                with col_yr1:
+                    st.metric(
+                        "Your RRSP Room",
+                        f"${rrsp_room:,.0f}",
+                        help="Total RRSP contribution room from your NOA"
+                    )
+                with col_yr2:
+                    st.metric(
+                        "Personal RRSP Used",
+                        f"${_personal_rrsp_only:,.0f}",
+                        delta=f"${max(0,_personal_remaining):,.0f} remaining" if _personal_remaining >= 0 else f"${abs(_personal_remaining):,.0f} OVER",
+                        delta_color="normal" if _personal_remaining >= 0 else "inverse",
+                        help="Your paycheck + employer match + lump sum RRSP contributions"
+                    )
+                
+                # Simple progress bar for personal RRSP only
+                _personal_pct = min(100, (_personal_rrsp_only / rrsp_room * 100))
+                _bar_color = "#ef4444" if _personal_remaining < 0 else "#3b82f6"
+                st.markdown(f"""
+                    <div style="background:#e2e8f0; border-radius:6px; overflow:hidden; height:20px; margin-top:8px;">
+                        <div style="background:{_bar_color}; width:{_personal_pct:.1f}%; height:100%; display:flex; 
+                             align-items:center; justify-content:center; color:white; font-size:0.75em; font-weight:600;">
+                            {f"{_personal_pct:.0f}%" if _personal_pct > 8 else ""}
+                        </div>
+                    </div>
+                    <div style="font-size:0.78em; color:#64748b; margin-top:4px;">
+                        {f"✅ {100-_personal_pct:.0f}% room available" if _personal_remaining >= 0 else f"⚠️ Over-contribution: ${abs(_personal_remaining):,.0f}"}
+                    </div>
+                """, unsafe_allow_html=True)
             
             st.markdown("### 📈 Portfolio Tracking")
             
@@ -2712,6 +4343,159 @@ else:
             
             st.caption(f"📊 Using {target_cagr}% CAGR for growth projections")
             
+            # ══════════════════════════════════════════════════════════════════
+            # SPOUSE'S RRSP SECTION - Separate, Optional, Collapsible
+            # ══════════════════════════════════════════════════════════════════
+            st.markdown("### 👫 Spouse's RRSP (Optional)")
+            st.caption("Skip this section if you're single or don't plan to use spousal RRSP")
+            
+            with st.expander("⚙️ Configure Spouse's RRSP Information", expanded=bool(year_data.get("spousal_rrsp_contribution", 0) > 0 or year_data.get("spouse_name"))):
+                st.markdown("**About Spousal RRSP:**")
+                st.info("""
+                    - You contribute to your SPOUSE's RRSP
+                    - Uses YOUR contribution room (not theirs)
+                    - YOU receive the tax refund
+                    - THEY own the account & withdraw in retirement
+                    - Withdrawals taxed at THEIR (lower) rate = income splitting benefit
+                """)
+                
+                spouse_name = st.text_input(
+                    "Spouse Name",
+                    value=year_data.get("spouse_name", ""),
+                    placeholder="e.g. Jane",
+                    help="Used for display purposes throughout the app"
+                )
+                
+                # ── SPOUSE'S NOA Information (Informational Only) ──
+                st.markdown("**Spouse's CRA Information (from their NOA)**")
+                
+                col_sp1, col_sp2 = st.columns(2)
+                
+                with col_sp1:
+                    spouse_rrsp_room = st.number_input(
+                        f"{spouse_name if spouse_name else 'Spouse'}'s RRSP Room",
+                        value=float(year_data.get("spouse_rrsp_room", 0)),
+                        step=1000.0,
+                        min_value=0.0,
+                        help=(
+                            "From your SPOUSE'S Notice of Assessment. "
+                            "This is for household records only — it does NOT affect YOUR calculations. "
+                            "Spousal RRSP contributions use YOUR room, not theirs."
+                        )
+                    )
+                
+                with col_sp2:
+                    spouse_gross_income = st.number_input(
+                        f"{spouse_name if spouse_name else 'Spouse'}'s Gross Income",
+                        value=float(year_data.get("spouse_gross_income", 0)),
+                        step=5000.0,
+                        min_value=0.0,
+                        help="Used to warn if they're in a higher tax bracket than you (which reduces income splitting benefit)"
+                    )
+                
+                spouse_age = st.number_input(
+                    f"{spouse_name if spouse_name else 'Spouse'}'s Age",
+                    value=int(year_data.get("spouse_age", 0)),
+                    step=1,
+                    min_value=0,
+                    max_value=100,
+                    help="CRA prohibits spousal RRSP contributions after Dec 31 of the year your spouse turns 71"
+                )
+                
+                st.divider()
+                
+                # ── SPOUSAL RRSP CONTRIBUTION (Uses YOUR Room) ──
+                st.markdown(f"**Spousal RRSP Contribution (uses YOUR ${rrsp_room:,.0f} room)**")
+                
+                spousal_rrsp_contribution = st.number_input(
+                    f"Amount to {spouse_name if spouse_name else 'Spouse'}'s RRSP",
+                    value=float(year_data.get("spousal_rrsp_contribution", 0)),
+                    step=500.0,
+                    min_value=0.0,
+                    help=(
+                        "⚠️ CRITICAL: This uses YOUR RRSP room, not theirs. "
+                        "It counts toward the same limit as your personal RRSP contributions."
+                    )
+                )
+                
+                spouse_rrsp_balance_start = st.number_input(
+                    f"{spouse_name if spouse_name else 'Spouse'}'s RRSP Balance (Start of Year)",
+                    value=float(year_data.get("spouse_rrsp_balance_start", 0)),
+                    step=1000.0,
+                    min_value=0.0,
+                    help="Their total RRSP balance on January 1st (for household portfolio tracking)"
+                )
+                
+                # ── REAL-TIME COMBINED ROOM CHECK ──
+                if spousal_rrsp_contribution > 0:
+                    st.divider()
+                    st.markdown("**Combined Room Usage Check**")
+                    
+                    _biweekly = (
+                        base_salary * (biweekly_pct / 100) +
+                        base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+                    )
+                    _lump = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
+                    _personal = _biweekly + _lump
+                    _total_both = _personal + spousal_rrsp_contribution
+                    _remaining_after_both = rrsp_room - _total_both
+                    _over_both = max(0, -_remaining_after_both)
+                    
+                    col_check1, col_check2, col_check3 = st.columns(3)
+                    
+                    with col_check1:
+                        st.metric("Your Room", f"${rrsp_room:,.0f}")
+                    with col_check2:
+                        st.metric("Personal RRSP", f"${_personal:,.0f}")
+                        st.metric("Spousal RRSP", f"${spousal_rrsp_contribution:,.0f}")
+                    with col_check3:
+                        if _over_both > 0:
+                            st.metric("⚠️ OVER-CONTRIBUTION", f"${_over_both:,.0f}",
+                                      delta=f"~${max(0,_over_both-2000)*0.01:,.0f}/mo penalty",
+                                      delta_color="inverse",
+                                      help="CRA charges 1%/month on amounts over $2,000 buffer")
+                        else:
+                            st.metric("Remaining Room", f"${max(0,_remaining_after_both):,.0f}",
+                                      delta=f"{max(0,_remaining_after_both/rrsp_room*100):.1f}% left",
+                                      help="Room remaining after personal + spousal contributions")
+                    
+                    # Combined visual split bar
+                    if _total_both > 0:
+                        _p_pct = min(100, _personal / rrsp_room * 100)
+                        _s_pct = min(100 - _p_pct, spousal_rrsp_contribution / rrsp_room * 100)
+                        _rem_pct = max(0, 100 - _p_pct - _s_pct)
+                        _color = "#ef4444" if _over_both > 0 else "#3b82f6"
+                        
+                        st.markdown(f"""
+                            <div style="background:#e2e8f0; border-radius:6px; overflow:hidden; height:24px; display:flex; margin:12px 0 4px 0;">
+                                <div style="background:{_color}; width:{_p_pct:.1f}%; display:flex; align-items:center;
+                                     justify-content:center; color:white; font-size:0.75em; font-weight:600; padding:0 4px;">
+                                    {f"Personal {_p_pct:.0f}%" if _p_pct > 10 else ""}
+                                </div>
+                                <div style="background:#8b5cf6; width:{_s_pct:.1f}%; display:flex; align-items:center;
+                                     justify-content:center; color:white; font-size:0.75em; font-weight:600; padding:0 4px;">
+                                    {f"Spousal {_s_pct:.0f}%" if _s_pct > 10 else ""}
+                                </div>
+                                <div style="background:#e2e8f0; width:{_rem_pct:.1f}%; display:flex; align-items:center;
+                                     justify-content:center; color:#94a3b8; font-size:0.75em; padding:0 4px;">
+                                    {f"Free {_rem_pct:.0f}%" if _rem_pct > 10 else ""}
+                                </div>
+                            </div>
+                            <div style="font-size:0.78em; color:#64748b;">
+                                🔵 Personal: ${_personal:,.0f} &nbsp;|&nbsp;
+                                🟣 Spousal: ${spousal_rrsp_contribution:,.0f} &nbsp;|&nbsp;
+                                {'🔴 OVER: $' + f'{_over_both:,.0f}' if _over_both > 0 else '⬜ Available: $' + f'{max(0,_remaining_after_both):,.0f}'}
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # Warnings
+                    if spouse_age >= 71:
+                        st.error(f"🚨 **CRA Rule Violation:** Cannot contribute to {spouse_name if spouse_name else 'spouse'}'s RRSP after Dec 31 of the year they turn 71!")
+                    elif spouse_gross_income > 0 and spouse_gross_income > t4_gross_income:
+                        st.warning(f"⚠️ **Income Splitting May Not Apply:** {spouse_name if spouse_name else 'Spouse'} earns more than you — withdrawals may be taxed at a higher rate.")
+                    elif spousal_rrsp_contribution > 0:
+                        st.success(f"✅ Spousal RRSP: ${spousal_rrsp_contribution:,.0f} → {spouse_name if spouse_name else 'spouse'}'s account (you get the refund)")
+            
             st.divider()
             
             # Form submit buttons
@@ -2731,25 +4515,114 @@ else:
                 )
             
             if submitted:
-                success = save_year_data(st.session_state.user_id, selected_year, {
-                    "t4_gross_income": t4_gross_income,
-                    "other_income": other_income,
-                    "base_salary": base_salary,
-                    "biweekly_pct": biweekly_pct,
-                    "employer_match": employer_match_cap,
-                    "rrsp_lump_sum_optimization": rrsp_lump_sum_optimization,
-                    "rrsp_lump_sum_additional": rrsp_lump_sum_additional,
-                    "tfsa_lump_sum": tfsa_lump_sum,
-                    "rrsp_room": rrsp_room,
-                    "tfsa_room": tfsa_room,
-                    "rrsp_balance_start": rrsp_balance_start,
-                    "tfsa_balance_start": tfsa_balance_start,
-                    "target_cagr": target_cagr
-                })
+                # ═══════════════════════════════════════════════════════════════
+                # PRE-SAVE VALIDATION - Check for over-contribution BEFORE saving
+                # ═══════════════════════════════════════════════════════════════
                 
-                if success:
-                    st.session_state.saved_flag = True
-                    st.rerun()
+                # Calculate total RRSP contributions from form inputs
+                _employee_contrib = base_salary * (biweekly_pct / 100)
+                _employer_contrib = base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+                _periodic = _employee_contrib + _employer_contrib
+                _lump = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
+                _personal_total = _periodic + _lump
+                _combined_total = _personal_total + spousal_rrsp_contribution
+                _over_amount = _combined_total - rrsp_room
+                
+                # Check 1: Over-contribution detected
+                if _over_amount > 0:
+                    st.error(f"""
+                    ### ⚠️ RRSP Room Exceeded — Cannot Save
+                    
+                    **Your total RRSP contributions:** ${_combined_total:,.0f}  
+                    **Your available room:** ${rrsp_room:,.0f}  
+                    **Over-contribution:** ${_over_amount:,.0f}  
+                    
+                    CRA charges **1% per month penalty** on amounts over $2,000 above your limit.  
+                    **Estimated monthly penalty:** ${max(0, _over_amount - 2000) * 0.01:,.0f}/month
+                    """)
+                    
+                    st.markdown("---")
+                    st.markdown("### 💡 Smart Solutions to Fix This:")
+                    
+                    # Solution 1: Spousal RRSP (if not already using it)
+                    if spousal_rrsp_contribution == 0:
+                        st.success(f"""
+                        **✅ Recommended Solution: Use Spousal RRSP**
+                        
+                        Instead of contributing ${_over_amount:,.0f} over your limit:
+                        - Move ${_over_amount:,.0f} to **Spousal RRSP** (in the "Spouse's RRSP (Optional)" section below)
+                        - Still uses YOUR ${rrsp_room:,.0f} room ✓
+                        - You still get the full tax refund ✓
+                        - Spouse owns the account — withdrawals taxed at their (lower) rate ✓
+                        - **No CRA penalty** ✓
+                        
+                        📍 **Action:** Scroll down to the **"👫 Spouse's RRSP (Optional)"** section and expand it.  
+                        Put **${_over_amount:,.0f}** in "Amount to Spouse's RRSP" instead of adding it to your personal RRSP lump sums.
+                        """)
+                    else:
+                        st.warning(f"""
+                        **⚠️ You're already using Spousal RRSP**
+                        
+                        Your spousal RRSP contribution: ${spousal_rrsp_contribution:,.0f}  
+                        Your personal RRSP contribution: ${_personal_total:,.0f}  
+                        Combined total: ${_combined_total:,.0f}  
+                        
+                        This still exceeds your ${rrsp_room:,.0f} room by ${_over_amount:,.0f}.
+                        """)
+                    
+                    # Solution 2: Verify NOA
+                    st.info(f"""
+                    **📝 Option: Verify Your RRSP Room**
+                    
+                    Double-check your Notice of Assessment:
+                    - Your NOA shows your exact RRSP room for {selected_year}
+                    - If your actual room is higher than ${rrsp_room:,.0f}, update "Your RRSP Room" field above
+                    - [canada.ca/my-cra-account](https://www.canada.ca/en/revenue-agency/services/e-services/e-services-individuals/account-individuals.html)
+                    """)
+                    
+                    # Solution 3: Accept penalty (discouraged)
+                    st.warning(f"""
+                    **⚠️ Option: Contribute Anyway (Not Recommended)**
+                    
+                    You can proceed with the over-contribution, but:
+                    - CRA will charge you **${max(0, _over_amount - 2000) * 0.01:,.0f}/month** in penalties
+                    - Penalty applies until you withdraw the excess or gain more room
+                    - You must file Form T1-OVP with your tax return
+                    
+                    💡 **Better approach:** Use spousal RRSP or reduce your contribution to ${rrsp_room:,.0f}.
+                    """)
+                    
+                    st.error("🚫 **Save blocked.** Please fix the over-contribution issue above before saving.")
+                
+                # Check 2: No over-contribution — proceed with save
+                else:
+                    success = save_year_data(st.session_state.user_id, selected_year, {
+                        "t4_gross_income": t4_gross_income,
+                        "other_income": other_income,
+                        "base_salary": base_salary,
+                        "biweekly_pct": biweekly_pct,
+                        "employer_match": employer_match_cap,
+                        "rrsp_lump_sum_optimization": rrsp_lump_sum_optimization,
+                        "rrsp_lump_sum_additional": rrsp_lump_sum_additional,
+                        "tfsa_lump_sum": tfsa_lump_sum,
+                        "rrsp_room": rrsp_room,
+                        "tfsa_room": tfsa_room,
+                        "rrsp_balance_start": rrsp_balance_start,
+                        "tfsa_balance_start": tfsa_balance_start,
+                        "target_cagr": target_cagr,
+                        # Spousal RRSP fields
+                        "spouse_name": spouse_name,
+                        "spousal_rrsp_contribution": spousal_rrsp_contribution,
+                        "spouse_rrsp_balance_start": spouse_rrsp_balance_start,
+                        "spouse_gross_income": spouse_gross_income,
+                        "spouse_age": spouse_age,
+                        "spouse_rrsp_room": spouse_rrsp_room,
+                        "last_spousal_contribution_year": selected_year if spousal_rrsp_contribution > 0 else year_data.get("last_spousal_contribution_year", 0)
+                    })
+                    
+                    if success:
+                        st.session_state.saved_flag = True
+                        st.rerun()
             
             if reset:
                 delete_year_data(st.session_state.user_id, selected_year)
@@ -2763,31 +4636,53 @@ else:
     other_income = year_data.get("other_income", 0)
     total_gross_income = t4_gross_income + other_income
     
-    # Calculate RRSP contributions with correct employer matching logic
+    # Spousal RRSP data
+    spouse_name = year_data.get("spouse_name", "Spouse")
+    spousal_rrsp_contribution = year_data.get("spousal_rrsp_contribution", 0)
+    spouse_rrsp_balance_start = year_data.get("spouse_rrsp_balance_start", 0)
+    spouse_gross_income = year_data.get("spouse_gross_income", 0)
+    spouse_age = year_data.get("spouse_age", 0)
+    spouse_rrsp_room = year_data.get("spouse_rrsp_room", 0)
+    last_spousal_year = year_data.get("last_spousal_contribution_year", 0)
+    spouse_label = spouse_name if spouse_name else "Spouse"
+    
+    # Calculate RRSP contributions
     employee_rrsp_contribution = base_salary * (biweekly_pct / 100)
     employer_rrsp_contribution = base_salary * (min(biweekly_pct, employer_match_cap) / 100)
     annual_rrsp_periodic = employee_rrsp_contribution + employer_rrsp_contribution
     
     rrsp_lump_sum = rrsp_lump_sum_optimization + rrsp_lump_sum_additional
-    total_rrsp_contributions = annual_rrsp_periodic + rrsp_lump_sum
+    personal_rrsp_contributions = annual_rrsp_periodic + rrsp_lump_sum
+    
+    # Total = personal + spousal (both count against YOUR room)
+    total_rrsp_contributions = personal_rrsp_contributions + spousal_rrsp_contribution
     taxable_income = max(0, total_gross_income - total_rrsp_contributions)
+    
+    # Over-contribution detection (raw, not floored)
+    raw_remaining_room = rrsp_room - total_rrsp_contributions
+    over_contribution_amount = max(0, -raw_remaining_room)
     
     # Portfolio calculations
     rrsp_balance_start = year_data.get("rrsp_balance_start", 0)
     tfsa_balance_start = year_data.get("tfsa_balance_start", 0)
-    target_cagr = year_data.get("target_cagr", 7.0) / 100  # Convert to decimal
-    
-    # Calculate end of year balances (growth + new contributions)
-    # Assuming contributions happen throughout the year, use half-year growth on new money
+    target_cagr = year_data.get("target_cagr", 7.0) / 100
+
+    # Personal RRSP growth
     rrsp_growth_existing = rrsp_balance_start * target_cagr
-    rrsp_growth_new_contrib = total_rrsp_contributions * (target_cagr / 2)  # Half year average
-    rrsp_balance_end = rrsp_balance_start + rrsp_growth_existing + total_rrsp_contributions + rrsp_growth_new_contrib
-    
+    rrsp_growth_new_contrib = personal_rrsp_contributions * (target_cagr / 2)
+    rrsp_balance_end = rrsp_balance_start + rrsp_growth_existing + personal_rrsp_contributions + rrsp_growth_new_contrib
+
+    # Spouse RRSP growth (balance grows + new spousal contributions)
+    spouse_rrsp_growth_existing = spouse_rrsp_balance_start * target_cagr
+    spouse_rrsp_growth_new = spousal_rrsp_contribution * (target_cagr / 2)
+    spouse_rrsp_balance_end = spouse_rrsp_balance_start + spouse_rrsp_growth_existing + spousal_rrsp_contribution + spouse_rrsp_growth_new
+
+    # TFSA growth
     tfsa_growth_existing = tfsa_balance_start * target_cagr
     tfsa_growth_new_contrib = tfsa_lump_sum * (target_cagr / 2)
     tfsa_balance_end = tfsa_balance_start + tfsa_growth_existing + tfsa_lump_sum + tfsa_growth_new_contrib
-    
-    total_portfolio_value = rrsp_balance_end + tfsa_balance_end
+
+    total_portfolio_value = rrsp_balance_end + spouse_rrsp_balance_end + tfsa_balance_end
     
     # Calculate tax refund
     estimated_refund = calculate_tax_refund(total_gross_income, total_rrsp_contributions)
@@ -2816,6 +4711,69 @@ else:
     
     # Header
     st.title(f"🏛️ Tax Optimization Strategy: {selected_year}")
+    
+    # ------------------------------------------------------------------
+    # SPOUSAL RRSP ALERTS — shown prominently at top of year view
+    # ------------------------------------------------------------------
+    if over_contribution_amount > 0:
+        st.error(f"""
+        🚨 **OVER-CONTRIBUTION WARNING**
+        
+        Your total RRSP contributions (${total_rrsp_contributions:,.0f}) exceed your available room 
+        (${rrsp_room:,.0f}) by **${over_contribution_amount:,.0f}**.
+        
+        CRA charges a **1% per month penalty** on amounts over $2,000 above your limit.
+        Estimated monthly penalty: **${max(0, over_contribution_amount - 2000) * 0.01:,.0f}/month**
+        
+        ➡️ Reduce your contributions or verify your NOA room is correct.
+        """)
+    
+    elif rrsp_room > 0 and total_rrsp_contributions > 0:
+        pct_used = (total_rrsp_contributions / rrsp_room) * 100
+        if pct_used >= 90 and spousal_rrsp_contribution == 0 and remaining_rrsp_room > 0:
+            st.warning(f"""
+            ⚠️ **Approaching RRSP Room Limit — Consider Spousal RRSP**
+            
+            You've used **{pct_used:.1f}%** of your RRSP room (${total_rrsp_contributions:,.0f} of ${rrsp_room:,.0f}).
+            You have **${remaining_rrsp_room:,.0f}** remaining.
+            
+            💡 **Tip:** Any additional contributions you want to make can go into a **Spousal RRSP**.  
+            - Still uses YOUR contribution room ✓  
+            - You still get the full tax refund ✓  
+            - Spouse owns the account — withdrawals taxed at their (lower) rate ✓  
+            
+            Add your spouse's details in the sidebar under **👫 Spousal RRSP**.
+            """)
+    
+    if spousal_rrsp_contribution > 0:
+        # 3-year attribution rule warning
+        if last_spousal_year > 0 and (selected_year - last_spousal_year) < 3:
+            years_locked = 3 - (selected_year - last_spousal_year)
+            safe_year = last_spousal_year + 3
+            st.warning(f"""
+            📅 **3-Year Attribution Rule — Active**
+            
+            You contributed to **{spouse_label}'s** RRSP in {last_spousal_year}.
+            If {spouse_label} withdraws before **January 1, {safe_year}**, that withdrawal 
+            will be **taxed in YOUR hands** (not theirs), eliminating the income-splitting benefit.
+            
+            ⏳ {years_locked} year(s) remaining until safe withdrawal window opens.
+            """)
+        
+        # Age-71 warning
+        if spouse_age >= 71:
+            st.error(f"🚨 **CRA Rule:** Cannot contribute to {spouse_label}'s RRSP after December 31 of the year they turn 71. Please remove this contribution.")
+        
+        # High-income spouse warning
+        if spouse_gross_income > 0 and spouse_gross_income > total_gross_income:
+            st.warning(f"""
+            ⚠️ **Income Splitting May Not Apply**
+            
+            {spouse_label}'s income (${spouse_gross_income:,.0f}) is higher than yours (${total_gross_income:,.0f}).
+            Spousal RRSP withdrawals may be taxed at a **higher rate** than your own withdrawals.
+            The income-splitting benefit may be reduced or eliminated.
+            Consult a tax advisor before proceeding.
+            """)
     
     # Status Card
     col_status1, col_status2 = st.columns([3, 1])
@@ -2890,23 +4848,77 @@ else:
         
         # Item 1: RRSP contribution needed
         if deficit > 0:
-            pending_items.append({
-                "item": "Increase RRSP Contributions",
-                "current": f"${total_rrsp_contributions:,.0f}",
-                "target": f"${total_rrsp_contributions + deficit:,.0f}",
-                "action": f"Add ${deficit:,.0f} to either 'RRSP Lump Sum (Tax Optimization)' or 'RRSP Lump Sum (Additional Refund)' in the sidebar",
-                "impact": f"Saves ${deficit * 0.4797:,.0f} in taxes at 47.97% Penthouse rate"
-            })
+            # Check if user has ANY room left
+            if remaining_rrsp_room <= 0:
+                # NO ROOM LEFT - Cannot add more RRSP (personal OR spousal)
+                pending_items.append({
+                    "item": "⚠️ RRSP Room Fully Used — Cannot Optimize Further",
+                    "current": f"${total_rrsp_contributions:,.0f} (all ${rrsp_room:,.0f} room used)",
+                    "target": f"${total_rrsp_contributions + deficit:,.0f} (would need ${deficit:,.0f} more)",
+                    "action": (
+                        f"🚫 **You've used all your ${rrsp_room:,.0f} RRSP room for {selected_year}.** "
+                        f"You need ${deficit:,.0f} more to avoid the Penthouse bracket, but **no room remains**. "
+                        f"\n\n"
+                        f"**Your options:**\n"
+                        f"1. ✅ **Verify NOA room** — Double-check your Notice of Assessment. If your actual room is higher, update the 'Your RRSP Room' field.\n"
+                        f"2. ⚠️ **Accept partial optimization** — Stay in Penthouse this year, optimize fully next year when you get new room.\n"
+                        f"3. 📅 **Plan ahead for next year** — You'll get ~${min(31560, total_gross_income * 0.18):,.0f} new room in {selected_year + 1} based on {selected_year} income.\n"
+                        f"4. 🔄 **Reduce other income** — If possible, defer bonuses or other income to next year.\n\n"
+                        f"💡 **Remember:** Spousal RRSP uses YOUR room too, so adding to spousal won't help when your room is at $0."
+                    ),
+                    "impact": f"Cannot achieve GREEN status this year without additional room"
+                })
+            elif deficit <= remaining_rrsp_room:
+                # Sufficient room - straightforward suggestion
+                pending_items.append({
+                    "item": "Increase RRSP Contributions",
+                    "current": f"${total_rrsp_contributions:,.0f}",
+                    "target": f"${total_rrsp_contributions + deficit:,.0f}",
+                    "action": f"Add ${deficit:,.0f} to either 'RRSP Lump Sum (Tax Optimization)' or 'RRSP Lump Sum (Additional Refund)' in the sidebar. You have ${remaining_rrsp_room:,.0f} room available.",
+                    "impact": f"Saves ${deficit * 0.4797:,.0f} in taxes at 47.97% Penthouse rate"
+                })
+            else:
+                # Some room left, but not enough - suggest using ALL remaining room
+                penthouse_remaining_after = deficit - remaining_rrsp_room
+                tax_saved_partial = remaining_rrsp_room * 0.4797
+                tax_saved_full = deficit * 0.4797
+                next_year_room = min(31560, total_gross_income * 0.18)
+                
+                pending_items.append({
+                    "item": "Increase RRSP Contributions (Partial Optimization)",
+                    "current": f"${total_rrsp_contributions:,.0f}",
+                    "target": f"${total_rrsp_contributions + remaining_rrsp_room:,.0f} (using all available room)",
+                    "action": (
+                        f"⚠️ **Insufficient Room for Full Optimization**\n\n"
+                        f"To fully optimize and avoid the Penthouse bracket, you need **${deficit:,.0f}** more in RRSP contributions. "
+                        f"However, you only have **${remaining_rrsp_room:,.0f}** room remaining in your {selected_year} contribution limit.\n\n"
+                        f"**📊 Recommended Strategy:**\n\n"
+                        f"**1. Use Your Remaining Room (Partial Optimization)**\n"
+                        f"   • Add ${remaining_rrsp_room:,.0f} to your RRSP contributions in the sidebar\n"
+                        f"   • You can split this between 'Personal RRSP' and 'Spousal RRSP' — both use the same ${rrsp_room:,.0f} room pool\n"
+                        f"   • Tax savings: ${tax_saved_partial:,.0f} (at 47.97% Penthouse rate)\n"
+                        f"   • Result: Reduces Penthouse exposure from ${deficit:,.0f} to ${penthouse_remaining_after:,.0f}\n\n"
+                        f"**2. Accept Partial Optimization This Year**\n"
+                        f"   • You'll still have ${penthouse_remaining_after:,.0f} in the Penthouse bracket\n"
+                        f"   • Tax cost on remaining exposure: ${penthouse_remaining_after * 0.4797:,.0f}\n"
+                        f"   • This is still better than ${tax_saved_full:,.0f} if you did nothing\n\n"
+                        f"**3. Plan for Full Optimization Next Year ({selected_year + 1})**\n"
+                        f"   • Based on your {selected_year} income, you'll receive ~${next_year_room:,.0f} new RRSP room\n"
+                        f"   • Use that room to eliminate the remaining ${penthouse_remaining_after:,.0f} exposure\n"
+                        f"   • Additional tax savings in {selected_year + 1}: ${penthouse_remaining_after * 0.4797:,.0f}\n\n"
+                        f"**4. Alternative: Spouse's Own RRSP (if applicable)**\n"
+                        f"   • If your spouse has income and their own RRSP room (from THEIR Notice of Assessment)\n"
+                        f"   • They can contribute to their own RRSP using THEIR room (separate from yours)\n"
+                        f"   • THEY would receive the tax refund on their tax return\n"
+                        f"   • This is different from 'Spousal RRSP' — it doesn't help YOUR tax optimization\n"
+                        f"   • However, it reduces household tax burden and builds family wealth\n\n"
+                        f"💡 **Important:** Personal RRSP and Spousal RRSP both count against YOUR ${rrsp_room:,.0f} room from your Notice of Assessment. "
+                        f"They are not separate pools — you have one total room limit shared between both."
+                    ),
+                    "impact": f"Partial optimization achieves ${tax_saved_partial:,.0f} tax savings now. Full optimization in {selected_year + 1} will save additional ${penthouse_remaining_after * 0.4797:,.0f}."
+                })
         
-        # Item 2: Room availability check
-        if deficit > remaining_rrsp_room:
-            pending_items.append({
-                "item": "⚠️ Insufficient RRSP Room",
-                "current": f"${remaining_rrsp_room:,.0f} available",
-                "target": f"${deficit:,.0f} needed",
-                "action": f"You need ${deficit - remaining_rrsp_room:,.0f} more RRSP room than available. Consider: (1) Verify your NOA room is correct, (2) Use spousal RRSP if married, (3) Accept partial optimization this year",
-                "impact": "May not achieve full green status this year"
-            })
+        # Item 2: Room availability check - REMOVED (now handled above)
         
         if pending_items:
             for idx, item in enumerate(pending_items, 1):
@@ -2969,33 +4981,94 @@ else:
         st.markdown("### 💼 Portfolio Growth Tracker")
         
         # Show RRSP contribution breakdown
-        if annual_rrsp_periodic > 0:
+        if annual_rrsp_periodic > 0 or spousal_rrsp_contribution > 0:
             st.markdown("#### 🎯 RRSP Contribution Breakdown")
-            col_breakdown1, col_breakdown2, col_breakdown3 = st.columns(3)
             
-            with col_breakdown1:
-                st.metric(
-                    "Your Paycheck Contributions",
-                    f"${employee_rrsp_contribution:,.0f}",
-                    delta=f"{biweekly_pct:.1f}% of base salary",
-                    help="Amount deducted from your paychecks throughout the year"
-                )
+            # Row 1: Paycheck contributions
+            if annual_rrsp_periodic > 0:
+                col_breakdown1, col_breakdown2, col_breakdown3 = st.columns(3)
+                
+                with col_breakdown1:
+                    st.metric(
+                        "Your Paycheck Contributions",
+                        f"${employee_rrsp_contribution:,.0f}",
+                        delta=f"{biweekly_pct:.1f}% of base salary",
+                        help="Amount deducted from your paychecks throughout the year"
+                    )
+                
+                with col_breakdown2:
+                    st.metric(
+                        "Employer Match",
+                        f"${employer_rrsp_contribution:,.0f}",
+                        delta=f"{min(biweekly_pct, employer_match_cap):.1f}% matched",
+                        help=f"Free money! Employer matches 100% up to {employer_match_cap:.1f}% cap"
+                    )
+                
+                with col_breakdown3:
+                    st.metric(
+                        "Total Periodic RRSP",
+                        f"${annual_rrsp_periodic:,.0f}",
+                        delta=f"${employer_rrsp_contribution:,.0f} is FREE",
+                        help="Combined employee + employer contributions from paychecks"
+                    )
             
-            with col_breakdown2:
-                st.metric(
-                    "Employer Match",
-                    f"${employer_rrsp_contribution:,.0f}",
-                    delta=f"{min(biweekly_pct, employer_match_cap):.1f}% matched",
-                    help=f"Free money! Employer matches 100% up to {employer_match_cap:.1f}% cap"
-                )
-            
-            with col_breakdown3:
-                st.metric(
-                    "Total Periodic RRSP",
-                    f"${annual_rrsp_periodic:,.0f}",
-                    delta=f"${employer_rrsp_contribution:,.0f} is FREE",
-                    help="Combined employee + employer contributions from paychecks"
-                )
+            # Row 2: Spousal RRSP breakdown (if applicable)
+            if spousal_rrsp_contribution > 0:
+                st.markdown("")
+                col_sp1, col_sp2, col_sp3 = st.columns(3)
+                
+                with col_sp1:
+                    st.metric(
+                        f"Personal RRSP (Lump Sum)",
+                        f"${rrsp_lump_sum:,.0f}",
+                        help="Your personal lump-sum RRSP contributions"
+                    )
+                
+                with col_sp2:
+                    st.metric(
+                        f"👫 Spousal RRSP ({spouse_label})",
+                        f"${spousal_rrsp_contribution:,.0f}",
+                        delta="Uses YOUR room • YOU get refund",
+                        help=f"Contribution to {spouse_label}'s RRSP. Counts against your room, you receive the tax deduction."
+                    )
+                
+                with col_sp3:
+                    st.metric(
+                        "Combined RRSP Total",
+                        f"${total_rrsp_contributions:,.0f}",
+                        delta=f"${spousal_rrsp_contribution:,.0f} to {spouse_label}",
+                        help="Personal + Spousal contributions combined (all count against your room)"
+                    )
+                
+                # Room usage bar with spousal split
+                st.markdown("")
+                if rrsp_room > 0:
+                    personal_pct = min(100, personal_rrsp_contributions / rrsp_room * 100)
+                    spousal_pct = min(100 - personal_pct, spousal_rrsp_contribution / rrsp_room * 100)
+                    remaining_pct = max(0, 100 - personal_pct - spousal_pct)
+                    
+                    st.markdown("**Your RRSP Room Usage**")
+                    st.markdown(f"""
+                        <div style="background: #f1f5f9; border-radius: 8px; overflow: hidden; height: 28px; display: flex;">
+                            <div style="background: #3b82f6; width: {personal_pct:.1f}%; display: flex; align-items: center; 
+                                 justify-content: center; color: white; font-size: 0.8em; font-weight: 600; white-space: nowrap; padding: 0 4px;">
+                                {f'Personal {personal_pct:.0f}%' if personal_pct > 8 else ''}
+                            </div>
+                            <div style="background: #8b5cf6; width: {spousal_pct:.1f}%; display: flex; align-items: center; 
+                                 justify-content: center; color: white; font-size: 0.8em; font-weight: 600; white-space: nowrap; padding: 0 4px;">
+                                {f'Spousal {spousal_pct:.0f}%' if spousal_pct > 8 else ''}
+                            </div>
+                            <div style="background: #e2e8f0; width: {remaining_pct:.1f}%; display: flex; align-items: center; 
+                                 justify-content: center; color: #64748b; font-size: 0.8em; padding: 0 4px;">
+                                {f'Available' if remaining_pct > 8 else ''}
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 0.85em;">
+                            <span>🔵 Personal: ${personal_rrsp_contributions:,.0f}</span>
+                            <span>🟣 Spousal: ${spousal_rrsp_contribution:,.0f}</span>
+                            <span>⬜ Available: ${remaining_rrsp_room:,.0f}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
             
             st.divider()
         
@@ -3007,19 +5080,30 @@ else:
         # Create portfolio table
         portfolio_table_data = []
         
-        # RRSP Row
+        # Personal RRSP Row
         portfolio_table_data.append({
-            "Account": "RRSP",
+            "Account": "🏦 RRSP (Yours)",
             "Start Balance": f"${rrsp_balance_start:,.0f}",
-            "New Contributions": f"${total_rrsp_contributions:,.0f}",
+            "New Contributions": f"${personal_rrsp_contributions:,.0f}",
             "Investment Growth": f"${rrsp_growth_existing + rrsp_growth_new_contrib:,.0f}",
             "End Balance": f"${rrsp_balance_end:,.0f}",
             "Net Gain": f"${rrsp_balance_end - rrsp_balance_start:,.0f}"
         })
         
+        # Spousal RRSP Row (only show if data exists)
+        if spousal_rrsp_contribution > 0 or spouse_rrsp_balance_start > 0:
+            portfolio_table_data.append({
+                "Account": f"👫 RRSP ({spouse_label})",
+                "Start Balance": f"${spouse_rrsp_balance_start:,.0f}",
+                "New Contributions": f"${spousal_rrsp_contribution:,.0f}",
+                "Investment Growth": f"${spouse_rrsp_growth_existing + spouse_rrsp_growth_new:,.0f}",
+                "End Balance": f"${spouse_rrsp_balance_end:,.0f}",
+                "Net Gain": f"${spouse_rrsp_balance_end - spouse_rrsp_balance_start:,.0f}"
+            })
+        
         # TFSA Row
         portfolio_table_data.append({
-            "Account": "TFSA",
+            "Account": "🌱 TFSA",
             "Start Balance": f"${tfsa_balance_start:,.0f}",
             "New Contributions": f"${tfsa_lump_sum:,.0f}",
             "Investment Growth": f"${tfsa_growth_existing + tfsa_growth_new_contrib:,.0f}",
@@ -3027,19 +5111,20 @@ else:
             "Net Gain": f"${tfsa_balance_end - tfsa_balance_start:,.0f}"
         })
         
-        # Total Row
-        total_start = rrsp_balance_start + tfsa_balance_start
+        # Total Row (household)
+        total_start = rrsp_balance_start + spouse_rrsp_balance_start + tfsa_balance_start
         total_contributions = total_rrsp_contributions + tfsa_lump_sum
-        total_growth = (rrsp_growth_existing + rrsp_growth_new_contrib + 
-                      tfsa_growth_existing + tfsa_growth_new_contrib)
+        total_growth = (rrsp_growth_existing + rrsp_growth_new_contrib +
+                        spouse_rrsp_growth_existing + spouse_rrsp_growth_new +
+                        tfsa_growth_existing + tfsa_growth_new_contrib)
         
         portfolio_table_data.append({
-            "Account": "**TOTAL**",
-            "Start Balance": f"**${total_start:,.0f}**",
-            "New Contributions": f"**${total_contributions:,.0f}**",
-            "Investment Growth": f"**${total_growth:,.0f}**",
-            "End Balance": f"**${total_portfolio_value:,.0f}**",
-            "Net Gain": f"**${total_portfolio_value - total_start:,.0f}**"
+            "Account": "📊 HOUSEHOLD TOTAL",
+            "Start Balance": f"${total_start:,.0f}",
+            "New Contributions": f"${total_contributions:,.0f}",
+            "Investment Growth": f"${total_growth:,.0f}",
+            "End Balance": f"${total_portfolio_value:,.0f}",
+            "Net Gain": f"${total_portfolio_value - total_start:,.0f}"
         })
         
         df_portfolio = pd.DataFrame(portfolio_table_data)
@@ -3314,7 +5399,7 @@ else:
         </div>
     """, unsafe_allow_html=True)
     
-    ac1, ac2, ac3, ac4, ac5 = st.columns(5)
+    ac1, ac2, ac3, ac4, ac5, ac6 = st.columns(6)
     
     with ac1:
         st.metric(
@@ -3332,27 +5417,35 @@ else:
     
     with ac3:
         st.metric(
+            f"👫 Spousal RRSP",
+            f"${spousal_rrsp_contribution:,.0f}",
+            delta=f"To {spouse_label}" if spousal_rrsp_contribution > 0 and spouse_label else None,
+            help=f"Contribution to {spouse_label}'s RRSP — uses your room, you get the refund"
+        )
+    
+    with ac4:
+        st.metric(
             "TFSA Deposit",
             f"${tfsa_lump_sum:,.0f}",
             help="Tax-free savings contribution"
         )
     
-    with ac4:
+    with ac5:
         st.metric(
             "Expected Refund",
             f"${estimated_refund:,.0f}",
             delta=f"+{(estimated_refund/max(1,total_rrsp_contributions))*100:.1f}%",
-            help="Tax refund from all RRSP contributions"
+            help="Tax refund from ALL RRSP contributions (personal + spousal)"
         )
     
-    with ac5:
-        net_cashflow = estimated_refund - rrsp_lump_sum - tfsa_lump_sum
+    with ac6:
+        net_cashflow = estimated_refund - rrsp_lump_sum - spousal_rrsp_contribution - tfsa_lump_sum
         st.metric(
             "Net Cashflow Impact",
             f"${net_cashflow:,.0f}",
             delta="Surplus" if net_cashflow >= 0 else "Investment",
             delta_color="normal" if net_cashflow >= 0 else "inverse",
-            help="Refund minus deposits"
+            help="Refund minus all lump-sum deposits (personal RRSP + spousal RRSP + TFSA)"
         )
     
     st.divider()
