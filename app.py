@@ -63,13 +63,70 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.5.4 - Sidebar Redesign"
+APP_VERSION = "6.5.5 - Room Exhaustion Logic"
 APP_DATE = "February 17, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.5.5 - Room Exhaustion Logic (Feb 17, 2026)
+
+### 🐛 CRITICAL BUG FIXES:
+
+**Problem:** Major logic contradictions when RRSP room was fully used:
+
+**Issue 1: Status Card Contradiction**
+- Status showed: "🟠 IN PROGRESS - Complete planning to optimize"
+- Pending Items showed: "⚠️ RRSP Room Fully Used — Cannot Optimize Further"
+- **These contradicted each other!**
+
+**Issue 2: Impossible Advice**
+- Strategic Insights said: "Consider depositing $34,560 to RRSP"
+- But user had: $0 room remaining
+- **Physically impossible to follow this advice!**
+
+**Fixes Applied:**
+
+1. **New Status: 🟡 ROOM EXHAUSTED (Partial Optimization)**
+   - Shows when RRSP room = $0 but still has Penthouse exposure
+   - Message: "Partial optimization achieved"
+   - Replaces misleading "Complete planning to optimize"
+
+2. **Status Banner Updated:**
+   - Now checks remaining room before showing message
+   - If room = $0: "🟡 ROOM EXHAUSTED - You've used all your $44,000 RRSP room..."
+   - If room > $0: "🟠 IN PROGRESS - Add $X more to optimize..."
+
+3. **Strategic Insights Fixed:**
+   - Checks remaining_rrsp_room BEFORE suggesting deposits
+   - If room > 0: Suggests actionable amount (min of needed vs available)
+   - If room = $0: Shows "Partial Optimization" insight with next-year planning
+
+4. **Year Tile Color Logic:**
+   - Added 4th status: 🟡 Yellow "Partial" for room exhausted
+   - Gray ⚪ = Not started
+   - Orange 🟠 = In Progress (has room available)
+   - Yellow 🟡 = Partial (room exhausted, did best possible)
+   - Green 🟢 = Optimized
+
+5. **New Helper Function:**
+   - is_room_exhausted(year_data) - detects when room is $0
+
+**Before (Contradictory):**
+```
+Status: 🟠 IN PROGRESS - Complete planning
+Insight: Consider depositing $34,560 (but $0 room!)
+```
+
+**After (Logical):**
+```
+Status: 🟡 ROOM EXHAUSTED - Partial optimization achieved
+Insight: Room fully used. Next year get ~$46,800 new room.
+```
+
+---
+
 ## 🎉 Version 6.5.4 - Sidebar Redesign (Feb 17, 2026)
 
 ### 🎨 MAJOR UI REDESIGN:
@@ -1382,6 +1439,40 @@ def is_year_optimized(year_data):
         return False
     
     total_rrsp = calculate_annual_rrsp(year_data)
+    taxable_income = max(0, total_gross - total_rrsp)
+    
+    # Optimized if no penthouse exposure (taxable income under $181,440)
+    penthouse_threshold = 181440
+    return taxable_income < penthouse_threshold
+
+def is_room_exhausted(year_data):
+    """
+    Returns True if:
+    1. Year has data entered (not optimized)
+    2. RRSP room is fully used ($0 remaining)
+    3. Still has Penthouse exposure (not optimized)
+    
+    This indicates partial optimization - user did everything they could,
+    but doesn't have enough room to fully optimize.
+    """
+    if not year_data:
+        return False
+    
+    # Check if year has data
+    if not has_year_data(year_data):
+        return False
+    
+    # Check if already optimized (if so, room status doesn't matter)
+    if is_year_optimized(year_data):
+        return False
+    
+    # Calculate remaining room
+    rrsp_room = year_data.get('rrsp_room', 0)
+    total_rrsp = calculate_annual_rrsp(year_data)
+    remaining_room = max(0, rrsp_room - total_rrsp)
+    
+    # Room is exhausted if $0 remaining
+    return remaining_room <= 0
     taxable_income = max(0, total_gross - total_rrsp)
     return taxable_income <= 181440
 
@@ -3836,11 +3927,13 @@ if st.session_state.current_page == "Home":
                 # Use consistent status logic:
                 # - Not saved       → gray "Empty" (never created)
                 # - Saved, no income → gray "Empty" (created but no data)
-                # - Saved, has income, above threshold → orange "In Progress"
-                # - Saved, has income, below threshold → green "Optimized"
+                # - Saved, optimized → green "Optimized"
+                # - Saved, room exhausted, not optimized → yellow "Partial"
+                # - Saved, has room, not optimized → orange "In Progress"
                 
                 is_optimized = is_year_optimized(year_data_entry) if is_saved else False
                 has_data = has_year_data(year_data_entry) if is_saved else False
+                room_exhausted = is_room_exhausted(year_data_entry) if is_saved else False
                 
                 if not is_saved or not has_data:
                     # Gray - Empty (not started or saved with zero income)
@@ -3855,8 +3948,15 @@ if st.session_state.current_page == "Home":
                     status_text = f"${annual_rrsp:,.0f}"
                     button_label = f"📅 **{yr}**\n{status_text}\n{status_emoji} Optimized"
                     container_style = "background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border: 2px solid #10b981; border-radius: 12px; padding: 4px;"
+                elif room_exhausted:
+                    # Yellow - Room exhausted (partial optimization)
+                    annual_rrsp = calculate_annual_rrsp(year_data_entry)
+                    status_emoji = "🟡"
+                    status_text = f"${annual_rrsp:,.0f}"
+                    button_label = f"📅 **{yr}**\n{status_text}\n{status_emoji} Partial"
+                    container_style = "background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #eab308; border-radius: 12px; padding: 4px;"
                 else:
-                    # Orange - In Progress
+                    # Orange - In Progress (has room available)
                     annual_rrsp = calculate_annual_rrsp(year_data_entry)
                     status_emoji = "🟠"
                     status_text = f"${annual_rrsp:,.0f}"
@@ -4976,7 +5076,11 @@ else:
         )
     
     with col_status2:
+        # Calculate remaining room
+        remaining_rrsp_room = max(0, rrsp_room - total_rrsp_contributions)
+        
         if is_optimized:
+            # GREEN - Fully optimized
             st.markdown("""
                 <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); 
                      padding: 20px; border-radius: 12px; border: 2px solid #10b981; text-align: center;">
@@ -4990,6 +5094,7 @@ else:
                 </div>
             """, unsafe_allow_html=True)
         elif not has_started:
+            # GRAY - Not started
             st.markdown("""
                 <div style="background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); 
                      padding: 20px; border-radius: 12px; border: 2px solid #94a3b8; text-align: center;">
@@ -5002,7 +5107,22 @@ else:
                     </div>
                 </div>
             """, unsafe_allow_html=True)
+        elif remaining_rrsp_room <= 0 and not is_optimized:
+            # YELLOW - Room exhausted but not optimized
+            st.markdown("""
+                <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); 
+                     padding: 20px; border-radius: 12px; border: 2px solid #eab308; text-align: center;">
+                    <div style="font-size: 3em;">🟡</div>
+                    <div style="font-size: 1.2em; font-weight: 600; color: #713f12; margin-top: 10px;">
+                        ROOM EXHAUSTED
+                    </div>
+                    <div style="font-size: 0.9em; color: #854d0e; margin-top: 5px;">
+                        Partial optimization achieved
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
         else:
+            # ORANGE - In progress (has room available)
             st.markdown("""
                 <div style="background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%); 
                      padding: 20px; border-radius: 12px; border: 2px solid #f97316; text-align: center;">
@@ -5028,8 +5148,17 @@ else:
     else:
         deficit = taxable_income - penthouse_threshold
         additional_rrsp_needed = deficit
-        st.warning(f"🟠 **IN PROGRESS** - Your taxable income (${taxable_income:,.0f}) exceeds the Penthouse threshold by ${deficit:,.0f}. "
-                  f"Add ${additional_rrsp_needed:,.0f} more to RRSP contributions to achieve GREEN optimization status and save ${deficit * 0.4797:,.0f} in taxes.")
+        remaining_rrsp_room = max(0, rrsp_room - total_rrsp_contributions)
+        
+        if remaining_rrsp_room <= 0:
+            # Room exhausted - cannot optimize further
+            st.warning(f"🟡 **ROOM EXHAUSTED** - Your taxable income (${taxable_income:,.0f}) exceeds the Penthouse threshold by ${deficit:,.0f}. "
+                      f"You've used all your ${rrsp_room:,.0f} RRSP room. Full optimization requires ${additional_rrsp_needed:,.0f} more contributions, "
+                      f"which must wait until next year when you receive ~${min(31560, total_gross_income * 0.18):,.0f} new room.")
+        else:
+            # Room available - can still optimize
+            st.warning(f"🟠 **IN PROGRESS** - Your taxable income (${taxable_income:,.0f}) exceeds the Penthouse threshold by ${deficit:,.0f}. "
+                      f"Add ${min(additional_rrsp_needed, remaining_rrsp_room):,.0f} more to RRSP contributions to achieve {'GREEN' if deficit <= remaining_rrsp_room else 'partial'} optimization status and save ${min(deficit, remaining_rrsp_room) * 0.4797:,.0f} in taxes.")
         
         # Pending Items Checklist
         st.markdown("### ✅ Pending Items to Reach Optimization")
@@ -5738,14 +5867,29 @@ else:
     
     # Insight 1: Penthouse exposure
     if penthouse_income > 0:
-        insights.append({
-            "icon": "⚠️",
-            "title": "High Priority: Penthouse Exposure",
-            "message": f"You have ${penthouse_income:,.0f} exposed to the Penthouse rate (47.97%). "
-                      f"Consider depositing an additional ${penthouse_shield_needed:,.0f} to your RRSP before March 1st "
-                      f"to save ${penthouse_income * 0.4797:,.0f} in taxes.",
-            "priority": "high"
-        })
+        if remaining_rrsp_room > 0:
+            # Have room - can still add RRSP
+            actionable_amount = min(penthouse_shield_needed, remaining_rrsp_room)
+            insights.append({
+                "icon": "⚠️",
+                "title": "High Priority: Penthouse Exposure",
+                "message": f"You have ${penthouse_income:,.0f} exposed to the Penthouse rate (47.97%). "
+                          f"Consider depositing an additional ${actionable_amount:,.0f} to your RRSP before March 1st "
+                          f"to save ${min(penthouse_income, actionable_amount) * 0.4797:,.0f} in taxes. "
+                          f"{'This will fully eliminate Penthouse exposure.' if actionable_amount >= penthouse_shield_needed else f'You have ${remaining_rrsp_room:,.0f} room available for partial optimization.'}",
+                "priority": "high"
+            })
+        else:
+            # No room left - cannot add more RRSP
+            insights.append({
+                "icon": "🟡",
+                "title": "Partial Optimization: RRSP Room Exhausted",
+                "message": f"You have ${penthouse_income:,.0f} exposed to the Penthouse rate (47.97%), but your ${rrsp_room:,.0f} RRSP room is fully used. "
+                          f"You've achieved maximum optimization possible this year. "
+                          f"Next year ({selected_year + 1}), you'll receive ~${min(31560, total_gross_income * 0.18):,.0f} new RRSP room to eliminate the remaining exposure. "
+                          f"Consider deploying your ${estimated_refund:,.0f} tax refund to TFSA for tax-free growth while you wait.",
+                "priority": "medium"
+            })
     
     # Insight 2: Unused RRSP room
     if remaining_rrsp_room > 10000:
