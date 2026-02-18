@@ -63,13 +63,111 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.6.2 - UX Polish"
+APP_VERSION = "6.6.3 - TFSA Calculator Fix"
 APP_DATE = "February 18, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.6.3 - TFSA Calculator Fix (Feb 18, 2026)
+
+### 🚨 CRITICAL BUG FIX - TFSA Over-Contribution Prevention!
+
+**Problem:** Refund Deployment Calculator allowed users to exceed TFSA room, risking CRA penalties!
+
+**User Discovery:**
+User's data showed:
+- TFSA Room: $33,922
+- Already contributed: $21,107
+- Remaining room: $12,815
+- Tax refund: $21,107
+
+But calculator showed:
+- Total TFSA contribution: $42,214  ❌ EXCEEDS ROOM BY $8,292!
+- Remaining room: $0
+
+**The Penalty Risk:**
+- CRA charges **1% per month** penalty on TFSA over-contributions
+- $8,292 excess × 1% × 12 months = **$995/year in penalties!** 💸
+
+**Root Cause:**
+```python
+# Line 6248-6251 - THE BUG:
+refund_to_deploy = st.slider(
+    "Amount to reinvest in TFSA",
+    0.0,
+    float(estimated_refund),  # ← BUG: Slider max = full refund ($21,107)
+    value=min(float(estimated_refund), float(remaining_tfsa_room)),
+)
+
+# Line 6262:
+new_tfsa_total = tfsa_lump_sum + refund_to_deploy
+# Could be: $21,107 + $21,107 = $42,214 > Room $33,922! ❌
+```
+
+**The Slider Logic Error:**
+- Slider maximum: Full refund amount ($21,107)
+- Should be: Remaining TFSA room ($12,815)
+- User could slide to full refund, exceeding room!
+- No warning about over-contribution
+- No validation check
+
+**Fix Applied:**
+
+**1. Cap Slider at Remaining Room:**
+```python
+# NEW (Correct):
+max_deployable = min(float(estimated_refund), float(remaining_tfsa_room))
+
+refund_to_deploy = st.slider(
+    "Amount to reinvest in TFSA",
+    0.0,
+    max_deployable,  # ✅ Capped at $12,815 (remaining room)
+    value=max_deployable,
+    help=f"Maximum: ${max_deployable:,.0f} (limited by TFSA room)"
+)
+```
+
+**2. Add Warning When Refund Exceeds Room:**
+Shows clear warning message when tax refund is larger than available TFSA room, informing user they can only deploy the room amount and must find another destination for the excess.
+
+**3. Show Excess Refund Destination:**
+Displays info message showing how much of the refund cannot fit in TFSA and is available for other savings/investments.
+
+**4. Add Validation Check:**
+Added safety check that stops execution with error message if calculated TFSA total would exceed available room, preventing accidental over-contribution.
+
+**After Fix (User's Scenario):**
+```
+Tax Refund: $21,107
+
+⚠️ TFSA Room Limit: You have $12,815 room remaining, but your refund is $21,107.
+    Deploy up to $12,815 to TFSA.
+    Remaining $8,292 → non-registered account.
+
+[Slider capped at $12,815]
+Selected amount: $12,815
+
+💡 Remaining refund: $8,292 available for other savings.
+
+Deployment Impact:
+✅ Total TFSA contribution: $33,922 (at limit)
+✅ Remaining TFSA room: $0
+✅ Combined tax-advantaged: $77,922
+```
+
+**Impact:**
+- ✅ **Prevents CRA penalties** (1% per month on excess)
+- ✅ **Clear warnings** when refund exceeds room
+- ✅ **Slider validation** prevents over-contribution
+- ✅ **Guides users** on what to do with excess refund
+- ✅ **Accurate calculations** for tax planning
+
+**This fix could save users thousands in penalties!** 🎯
+
+---
+
 ## 🎉 Version 6.6.2 - UX Polish (Feb 18, 2026)
 
 ### 🎨 UX IMPROVEMENT:
@@ -6245,15 +6343,36 @@ else:
         st.markdown("**Strategic Question:** How much of your tax refund will you reinvest into your TFSA?")
         
         if estimated_refund > 0:
+            # Check if refund exceeds available TFSA room
+            can_deploy_full_refund = estimated_refund <= remaining_tfsa_room
+            max_deployable = min(float(estimated_refund), float(remaining_tfsa_room))
+            
+            # Show warning if can't deploy full refund
+            if not can_deploy_full_refund:
+                excess_refund = estimated_refund - remaining_tfsa_room
+                st.warning(f"""
+                    ⚠️ **TFSA Room Limit**: You have ${remaining_tfsa_room:,.0f} TFSA room remaining, 
+                    but your tax refund is ${estimated_refund:,.0f}. 
+                    
+                    You can deploy up to ${remaining_tfsa_room:,.0f} to TFSA. 
+                    The remaining ${excess_refund:,.0f} should go to a non-registered account or be used for other purposes.
+                """)
+            
             refund_to_deploy = st.slider(
                 "Amount to reinvest in TFSA",
                 0.0,
-                float(estimated_refund),
-                value=min(float(estimated_refund), float(remaining_tfsa_room)),
-                step=100.0
+                max_deployable,  # FIX: Cap at remaining TFSA room, not full refund!
+                value=max_deployable,
+                step=100.0,
+                help=f"Maximum: ${max_deployable:,.0f} (limited by TFSA room)"
             )
             
             st.caption(f"Selected amount: ${refund_to_deploy:,.0f}")
+            
+            # Show what happens to excess refund if any
+            if estimated_refund > refund_to_deploy:
+                refund_excess = estimated_refund - refund_to_deploy
+                st.info(f"💡 **Remaining refund:** ${refund_excess:,.0f} will be available for other savings/investments or spending.")
             
             col_deploy1, col_deploy2 = st.columns(2)
             
@@ -6261,6 +6380,11 @@ else:
                 st.markdown("**Deployment Impact:**")
                 new_tfsa_total = tfsa_lump_sum + refund_to_deploy
                 new_tfsa_room = max(0, tfsa_room - new_tfsa_total)
+                
+                # Add validation check
+                if new_tfsa_total > tfsa_room:
+                    st.error(f"🚨 **ERROR**: Total TFSA ${new_tfsa_total:,.0f} exceeds room ${tfsa_room:,.0f}!")
+                    st.stop()
                 
                 st.write(f"- Total TFSA contribution: ${new_tfsa_total:,.0f}")
                 st.write(f"- Remaining TFSA room: ${new_tfsa_room:,.0f}")
