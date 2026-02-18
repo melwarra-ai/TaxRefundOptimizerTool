@@ -63,13 +63,94 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.5.6 - Optimization Status Fix"
+APP_VERSION = "6.5.7 - Edge Case Fix"
 APP_DATE = "February 17, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.5.7 - Edge Case Fix (Feb 17, 2026)
+
+### 🐛 CRITICAL EDGE CASE BUG FIX:
+
+**Problem:** Years with taxable income EXACTLY at $181,440 threshold showing as "In Progress" instead of "Optimized"
+
+**User Report (Continued):**
+After v6.5.6 fix, status STILL showing wrong:
+- 2025: Taxable $181,440 → 🟠 In Progress ❌
+- 2026: Taxable $181,440 → 🟠 In Progress ❌
+- 2027: Taxable $181,440 → 🟠 In Progress ❌
+
+**Root Cause - Off-by-One Error:**
+```python
+# The code checked:
+return taxable_income < penthouse_threshold
+# So: $181,440 < $181,440 = FALSE ❌
+
+# But this is WRONG because:
+# Penthouse bracket starts at $181,441 (not $181,440)
+# Income of exactly $181,440 has $0 in Penthouse
+```
+
+**Tax Bracket Reality:**
+```
+Floor 5: $117,045 - $181,440 → 33.89%
+Penthouse: $181,441+ → 47.97%
+                ^^^^
+         First dollar at 47.97%!
+```
+
+If your taxable income = $181,440 exactly:
+- Last dollar taxed: $181,440 @ 33.89% (Floor 5)
+- Penthouse exposure: **$0** ✅
+- Should be: **OPTIMIZED** ✅
+
+**Fix Applied:**
+Changed threshold check from `<` to `<=` in 3 places:
+
+1. **is_year_optimized() function:**
+```python
+# OLD:
+return taxable_income < penthouse_threshold  # Excludes $181,440 ❌
+
+# NEW:
+return taxable_income <= penthouse_threshold  # Includes $181,440 ✅
+```
+
+2. **Year View planning_complete:**
+```python
+# OLD:
+planning_complete = (income > 0) and (rrsp_room > 0) and (tfsa_room > 0)
+
+# NEW:
+planning_complete = (income > 0) and (rrsp_room > 0)  # TFSA not required
+```
+
+3. **Email notifications:**
+```python
+# OLD:
+is_optimized = taxable_income < threshold
+
+# NEW:
+is_optimized = taxable_income <= threshold
+```
+
+**After Fix:**
+```
+User with $181,440 taxable income:
+├─ is_year_optimized() → TRUE ✅
+├─ Home Page Tile → 🟢 Optimized ✅
+└─ Year View Status → 🟢 OPTIMIZED ✅
+```
+
+**Edge Case Examples:**
+- $181,439: Optimized ✅ (Floor 5, $1 below threshold)
+- $181,440: Optimized ✅ (Floor 5, AT threshold) ← Fixed!
+- $181,441: NOT Optimized ❌ (Penthouse, $1 above threshold)
+
+---
+
 ## 🎉 Version 6.5.6 - Optimization Status Fix (Feb 17, 2026)
 
 ### 🐛 CRITICAL BUG FIX:
@@ -1004,7 +1085,8 @@ def send_welcome_email(username, email):
 
 def send_optimization_alert(username, email, year, taxable_income, threshold=181440):
     """Send tax optimization alert"""
-    is_optimized = taxable_income < threshold
+    # Using <= because income exactly AT threshold means $0 in Penthouse bracket
+    is_optimized = taxable_income <= threshold
     subject = f"{'🎉' if is_optimized else '⚠️'} {year} Tax Year {'Optimized!' if is_optimized else 'Needs Work'}"
     status = "Optimized" if is_optimized else "Needs Optimization"
     color = "#10b981" if is_optimized else "#f59e0b"
@@ -1500,9 +1582,11 @@ def is_year_optimized(year_data):
     total_rrsp = calculate_annual_rrsp(year_data)
     taxable_income = max(0, total_gross - total_rrsp)
     
-    # Optimized if no penthouse exposure (taxable income under $181,440)
+    # Optimized if no penthouse exposure (taxable income at or below $181,440)
+    # NOTE: Using <= because $181,440 exactly means $0 in Penthouse bracket
+    # The Penthouse rate (47.97%) applies to income ABOVE $181,440
     penthouse_threshold = 181440
-    return taxable_income < penthouse_threshold
+    return taxable_income <= penthouse_threshold
 
 def is_room_exhausted(year_data):
     """
@@ -5046,9 +5130,8 @@ else:
                    rrsp_room > 0 or tfsa_room > 0)
     
     # Check if essential planning fields are complete
-    # Essential fields: income source + contribution rooms
-    planning_complete = ((t4_gross_income > 0 or other_income > 0) and 
-                         rrsp_room > 0 and tfsa_room > 0)
+    # Essential fields: income source + RRSP room (TFSA not required for optimization)
+    planning_complete = ((t4_gross_income > 0 or other_income > 0) and rrsp_room > 0)
     
     # Only show OPTIMIZED if planning is complete AND at or below threshold
     # Note: Income of exactly $181,440 is NOT taxed in Penthouse (due to > comparison in tax calc)
