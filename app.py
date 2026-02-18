@@ -63,13 +63,51 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.6.0 - Room Utilization Fix"
+APP_VERSION = "6.6.1 - Hotfix"
 APP_DATE = "February 18, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.6.1 - Hotfix (Feb 18, 2026)
+
+### 🐛 IMMEDIATE HOTFIX:
+
+**Problem:** v6.6.0 crashed with NameError!
+
+**Error:**
+```
+NameError: name 'current_year' is not defined
+Line 3662: st.caption(f"💡 Showing {current_year}...")
+```
+
+**Root Cause:**
+In v6.6.0, renamed `current_year` to `latest_year` but missed updating 3 references:
+- Line 3662: `st.caption(f"... {current_year} ...")`
+- Line 3666: `f"No data for {current_year}"`
+- Line 3668: `f"create a {current_year} tax plan"`
+
+**Fix Applied:**
+```python
+# OLD (Broken):
+st.caption(f"💡 Showing {current_year} contribution data...")
+# NameError! current_year doesn't exist!
+
+# NEW (Fixed):
+# Removed duplicate caption (info already shown in blue box above)
+# Updated else block to use latest_year instead
+```
+
+**Changes:**
+1. Removed duplicate caption (year already shown prominently in blue info box)
+2. Fixed "No data" message to use `latest_year`
+3. All references now consistent
+
+**Status:** ✅ RESOLVED - v6.6.1 deploys successfully
+
+---
+
 ## 🎉 Version 6.6.0 - Room Utilization Fix (Feb 18, 2026)
 
 ### 🐛 CRITICAL LOGIC BUG FIX:
@@ -3658,14 +3696,13 @@ if st.session_state.current_page == "Home":
                     delta_color="inverse" if tfsa_pct < 80 else "normal"
                 )
             
-            # Show which year is displayed
-            st.caption(f"💡 Showing {current_year} contribution data. [Click any year below to view/edit that year's plan]")
+            # Note: Year info already shown in blue box above, remove duplicate caption
         else:
-            # Current year not found — show message
+            # Latest year not found — show message
             st.info(f"""
-                📅 **No data for {current_year} yet.**
+                📅 **No data for {latest_year} yet.**
                 
-                Click "➕ Add Year" below to create a {current_year} tax plan, or select an existing year to view its progress.
+                Click "➕ Add Year" below to create a {latest_year} tax plan, or select an existing year to view its progress.
             """)
         
         st.divider()
