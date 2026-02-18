@@ -4746,15 +4746,22 @@ def show_notification_settings_page():
             conn.autocommit = True
             cursor = conn.cursor()
             
-            # Create user_email_preferences table
+            # Create user_email_preferences table with notification_email field
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS user_email_preferences (
                     user_id INTEGER PRIMARY KEY,
+                    notification_email VARCHAR(255),
                     enabled BOOLEAN DEFAULT TRUE,
                     frequency VARCHAR(20) DEFAULT 'real_time',
                     preferences JSONB DEFAULT '{"notifications": {}}'::jsonb,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
+            """)
+            
+            # Add notification_email column if it doesn't exist (for existing tables)
+            cursor.execute("""
+                ALTER TABLE user_email_preferences 
+                ADD COLUMN IF NOT EXISTS notification_email VARCHAR(255)
             """)
             
             # Create notification_log table  
@@ -4795,7 +4802,8 @@ def show_notification_settings_page():
         st.info("💡 Contact your administrator to ensure database tables are created.")
         return
     
-    # Set defaults
+    # Set defaults - FIX 4: Default notification email to login email
+    current_notification_email = st.session_state.email  # Use login email by default
     current_enabled = True
     current_frequency = 'real_time'
     current_notifications = {
@@ -4805,6 +4813,14 @@ def show_notification_settings_page():
         'employer_match': True,
         'tax_refund': True
     }
+    
+    # FIX 1: Add admin-specific notifications for admin users
+    if st.session_state.role == 'admin':
+        current_notifications.update({
+            'new_user_created': True,
+            'user_milestone_reached': True,
+            'system_alerts': True
+        })
     
     # Try to load existing preferences (only if tables were created successfully)
     if tables_created:
@@ -4825,7 +4841,7 @@ def show_notification_settings_page():
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
             cursor.execute("""
-                SELECT enabled, frequency, preferences 
+                SELECT notification_email, enabled, frequency, preferences 
                 FROM user_email_preferences 
                 WHERE user_id = %s
             """, (st.session_state.user_id,))
@@ -4835,10 +4851,17 @@ def show_notification_settings_page():
             conn.close()
             
             if result:
+                # Load notification email (use login email if not set)
+                current_notification_email = result.get('notification_email') or st.session_state.email
                 current_enabled = result['enabled']
                 current_frequency = result['frequency']
                 if result['preferences'] and 'notifications' in result['preferences']:
                     current_notifications = result['preferences']['notifications']
+                    # Add admin notifications to defaults if admin (for new fields)
+                    if st.session_state.role == 'admin':
+                        current_notifications.setdefault('new_user_created', True)
+                        current_notifications.setdefault('user_milestone_reached', True)
+                        current_notifications.setdefault('system_alerts', True)
                     
         except Exception as e:
             if conn:
@@ -4858,6 +4881,19 @@ def show_notification_settings_page():
             value=current_enabled,
             help="Master switch for all email notifications"
         )
+        
+        # FIX 4: Add email address field (defaults to login email)
+        notification_email = st.text_input(
+            "📧 Notification Email Address",
+            value=current_notification_email,
+            help=f"Email where notifications will be sent (defaults to your login email: {st.session_state.email})",
+            placeholder=st.session_state.email
+        )
+        
+        if not notification_email:
+            notification_email = st.session_state.email  # Fall back to login email if empty
+        
+        st.caption(f"💡 **Tip:** Notifications will be sent to: **{notification_email}**")
         
         frequency = st.selectbox(
             "Email frequency",
@@ -4914,15 +4950,56 @@ def show_notification_settings_page():
             help="Strategic advice on deploying your tax refund to TFSA"
         )
         
+        # FIX 1: Admin-specific notifications (only show for admins)
+        if st.session_state.role == 'admin':
+            st.markdown("#### 👑 Admin Notifications (Exclusive)")
+            
+            col_admin1, col_admin2 = st.columns(2)
+            
+            with col_admin1:
+                new_user_created = st.checkbox(
+                    "👤 New User Registrations",
+                    value=current_notifications.get('new_user_created', True),
+                    help="Notification when a new user creates an account"
+                )
+                
+                user_milestone_reached = st.checkbox(
+                    "🎯 User Milestones",
+                    value=current_notifications.get('user_milestone_reached', True),
+                    help="When users reach portfolio milestones ($100k, $250k, $500k, $1M)"
+                )
+            
+            with col_admin2:
+                system_alerts = st.checkbox(
+                    "⚙️ System Alerts",
+                    value=current_notifications.get('system_alerts', True),
+                    help="Database errors, high user activity, or security alerts"
+                )
+        else:
+            # Set admin notifications to None for non-admin users
+            new_user_created = None
+            user_milestone_reached = None
+            system_alerts = None
+        
         st.divider()
         
         # Preview section
         st.markdown("### 👀 Notification Preview")
         
+        # Count admin notifications if admin
+        admin_notification_count = 0
+        if st.session_state.role == 'admin':
+            admin_notification_count = sum([
+                new_user_created if new_user_created is not None else False,
+                user_milestone_reached if user_milestone_reached is not None else False,
+                system_alerts if system_alerts is not None else False
+            ])
+        
         notification_counts = {
             'critical': sum([rrsp_deadline, tfsa_overcontribution]),
             'high': sum([penthouse_bracket, employer_match]),
-            'medium': sum([tax_refund])
+            'medium': sum([tax_refund]),
+            'admin': admin_notification_count
         }
         
         total_active = sum(notification_counts.values())
@@ -4948,6 +5025,15 @@ def show_notification_settings_page():
                     est_emails_per_year += 12  # Monthly
                 if tax_refund:
                     est_emails_per_year += 1  # Once per year
+                
+                # Add admin notification estimates
+                if st.session_state.role == 'admin':
+                    if new_user_created:
+                        est_emails_per_year += 50  # Estimate 50 new users per year
+                    if user_milestone_reached:
+                        est_emails_per_year += 20  # Estimate 20 milestone events per year
+                    if system_alerts:
+                        est_emails_per_year += 10  # Estimate 10 system alerts per year
                 
                 frequency_multiplier = {
                     'real_time': 1,
@@ -4997,28 +5083,41 @@ def show_notification_settings_page():
                 conn.autocommit = True
                 cursor = conn.cursor()
                 
+                # Build notification preferences JSON
+                notification_prefs = {
+                    'notifications': {
+                        'rrsp_deadline': rrsp_deadline,
+                        'tfsa_overcontribution': tfsa_overcontribution,
+                        'penthouse_bracket': penthouse_bracket,
+                        'employer_match': employer_match,
+                        'tax_refund': tax_refund
+                    }
+                }
+                
+                # Add admin notifications if user is admin
+                if st.session_state.role == 'admin' and new_user_created is not None:
+                    notification_prefs['notifications'].update({
+                        'new_user_created': new_user_created,
+                        'user_milestone_reached': user_milestone_reached,
+                        'system_alerts': system_alerts
+                    })
+                
                 cursor.execute("""
-                    INSERT INTO user_email_preferences (user_id, enabled, frequency, preferences, updated_at)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO user_email_preferences (user_id, notification_email, enabled, frequency, preferences, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (user_id) 
                     DO UPDATE SET 
+                        notification_email = EXCLUDED.notification_email,
                         enabled = EXCLUDED.enabled,
                         frequency = EXCLUDED.frequency,
                         preferences = EXCLUDED.preferences,
                         updated_at = EXCLUDED.updated_at
                 """, (
                     st.session_state.user_id,
+                    notification_email,
                     enabled,
                     frequency,
-                    json.dumps({
-                        'notifications': {
-                            'rrsp_deadline': rrsp_deadline,
-                            'tfsa_overcontribution': tfsa_overcontribution,
-                            'penthouse_bracket': penthouse_bracket,
-                            'employer_match': employer_match,
-                            'tax_refund': tax_refund
-                        }
-                    }),
+                    json.dumps(notification_prefs),
                     datetime.now()
                 ))
                 
@@ -5078,73 +5177,75 @@ if not st.session_state.logged_in:
 # Load user's data
 all_history = load_all_data(st.session_state.user_id)
 
-# Sidebar navigation
-with st.sidebar:
-    # Admin badge (if admin)
-    if st.session_state.role == 'admin':
-        st.markdown("""
-            <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
-                 padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
-                 display: inline-block; width: auto;">
-                <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
+# Sidebar navigation - only show on Home page to avoid duplicates
+if st.session_state.current_page == "Home":
+    with st.sidebar:
+        # Admin badge (if admin)
+        if st.session_state.role == 'admin':
+            st.markdown("""
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                     padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
+                     display: inline-block; width: auto;">
+                    <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Username
+        st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
+                    unsafe_allow_html=True)
+        
+        st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
+        
+        # App branding
+        st.markdown(f"""
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 1.1em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                    📊 {APP_NAME}
+                </div>
+                <div style="font-size: 0.85em; color: #64748b;">
+                    {APP_SUBTITLE} v{APP_VERSION.split(' - ')[0]}
+                </div>
             </div>
         """, unsafe_allow_html=True)
-    
-    # Username
-    st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
-                unsafe_allow_html=True)
-    
-    st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
-    
-    # App branding
-    st.markdown(f"""
-        <div style="margin-bottom: 20px;">
-            <div style="font-size: 1.1em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
-                📊 {APP_NAME}
-            </div>
-            <div style="font-size: 0.85em; color: #64748b;">
-                {APP_SUBTITLE} v{APP_VERSION.split(' - ')[0]}
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    # Version Info - Collapsible expander
-    with st.expander("ℹ️ Version Info", expanded=False):
-        st.markdown(f"""
-            **Version:** {APP_VERSION.split(' - ')[0]}  
-            **Released:** {APP_DATE}  
-            **Build:** {APP_VERSION.split(' - ')[1] if ' - ' in APP_VERSION else 'Production'}
-        """)
         
-        if st.button("📋 View Changelog", use_container_width=True, key="sidebar_changelog"):
-            st.session_state.current_page = "Version"
+        # Version Info - Collapsible expander
+        with st.expander("ℹ️ Version Info", expanded=False):
+            st.markdown(f"""
+                **Version:** {APP_VERSION.split(' - ')[0]}  
+                **Released:** {APP_DATE}  
+                **Build:** {APP_VERSION.split(' - ')[1] if ' - ' in APP_VERSION else 'Production'}
+            """)
+            
+            if st.button("📋 View Changelog", use_container_width=True, key="sidebar_changelog"):
+                st.session_state.current_page = "Version"
+                st.rerun()
+        
+        st.divider()
+        
+        # Admin dashboard button (only for admins) - FIX 3: Remove type="primary" for neutral color
+        if st.session_state.role == 'admin':
+            if st.button("👥 Admin Dashboard", use_container_width=True, key="main_admin_btn"):
+                st.session_state.current_page = "Admin"
+                st.rerun()
+        
+        if st.button("👤 Profile Settings", use_container_width=True, key="main_profile_btn"):
+            st.session_state.current_page = "Profile"
             st.rerun()
-    
-    st.divider()
-    
-    # Admin dashboard button (only for admins)
-    if st.session_state.role == 'admin':
-        if st.button("👥 Admin Dashboard", use_container_width=True, key="main_admin_btn", type="primary"):
-            st.session_state.current_page = "Admin"
+        
+        if st.button("📧 Notification Settings", use_container_width=True, key="main_notifications_btn"):
+            st.session_state.current_page = "Notifications"
             st.rerun()
-    
-    if st.button("👤 Profile Settings", use_container_width=True, key="main_profile_btn"):
-        st.session_state.current_page = "Profile"
-        st.rerun()
-    
-    if st.button("📧 Notification Settings", use_container_width=True, key="main_notifications_btn"):
-        st.session_state.current_page = "Notifications"
-        st.rerun()
-    
-    if st.button("🚪 Logout", use_container_width=True, type="secondary", key="main_logout_btn"):
-        logout_user(st.session_state.session_token)
-        st.session_state.logged_in = False
-        st.session_state.user_id = None
-        st.session_state.username = None
-        st.session_state.email = None
-        st.session_state.role = None
-        st.session_state.session_token = None
-        st.rerun()
+        
+        # FIX 2: Only one Logout button
+        if st.button("🚪 Logout", use_container_width=True, type="secondary", key="main_logout_btn"):
+            logout_user(st.session_state.session_token)
+            st.session_state.logged_in = False
+            st.session_state.user_id = None
+            st.session_state.username = None
+            st.session_state.email = None
+            st.session_state.role = None
+            st.session_state.session_token = None
+            st.rerun()
 
 # Show admin dashboard if selected (admin only)
 if st.session_state.current_page == "Admin":
