@@ -63,13 +63,61 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.6.1 - Hotfix"
+APP_VERSION = "6.6.2 - UX Polish"
 APP_DATE = "February 18, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.6.2 - UX Polish (Feb 18, 2026)
+
+### 🎨 UX IMPROVEMENT:
+
+**Problem:** Misleading instruction text in Contribution Room Utilization section
+
+**User Report:**
+"Text says '[Click any year below to view/edit]' but there's nothing clickable below!"
+
+**The Issue:**
+```
+📅 Showing 2028 contribution data (your most recent plan). 
+    Current calendar year is 2026. [Click any year below to view/edit]
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                    Nothing here to click! ❌
+```
+
+**Why it was misleading:**
+- Info box says "click below"
+- But year tiles are in "Manage Planning Years" section
+- That section is MUCH further down the page
+- Users expected clickable elements right there
+
+**Fix Applied:**
+```python
+# OLD (Misleading):
+st.info(f"📅 Showing {latest_year} contribution data... "
+       f"[Click any year below to view/edit]")  # Nothing below!
+
+# NEW (Clear):
+st.info(f"📅 Showing {latest_year} contribution data.")
+# Removed misleading "click below" text
+```
+
+**After Fix:**
+- Info box just shows WHAT data is displayed
+- No false promise of clickable elements
+- Year management has its own clear section with instructions
+- Users aren't confused by non-existent clickable items
+
+**Better UX:**
+- ✅ Clear, accurate information only
+- ✅ No misleading calls-to-action
+- ✅ Year tiles are in their own dedicated section
+- ✅ Section headers guide users naturally
+
+---
+
 ## 🎉 Version 6.6.1 - Hotfix (Feb 18, 2026)
 
 ### 🐛 IMMEDIATE HOTFIX:
@@ -3610,9 +3658,9 @@ if st.session_state.current_page == "Home":
             # Prominently show which year this data is for
             calendar_year = datetime.now().year
             if int(latest_year) > calendar_year:
-                st.info(f"📅 **Showing {latest_year} contribution data** (your most recent plan). Current calendar year is {calendar_year}. [Click any year below to view/edit]")
+                st.info(f"📅 **Showing {latest_year} contribution data** (your most recent plan). Current calendar year is {calendar_year}.")
             else:
-                st.info(f"📅 **Showing {latest_year} contribution data.** [Click any year below to view/edit that year's plan]")
+                st.info(f"📅 **Showing {latest_year} contribution data.**")
             st.markdown("")
             rrsp_room = latest_year_data.get('rrsp_room', 0)
             tfsa_room = latest_year_data.get('tfsa_room', 0)
