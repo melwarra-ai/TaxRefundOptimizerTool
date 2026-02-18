@@ -4725,9 +4725,24 @@ def show_notification_settings_page():
     tables_created = False
     
     try:
-        # Connect directly to database
+        # Connect directly to database - build connection string from secrets
         if hasattr(st, 'secrets') and 'database' in st.secrets:
-            conn = psycopg2.connect(st.secrets.database.url)
+            # Build connection string from individual parameters
+            if 'url' in st.secrets.database:
+                # If URL is provided, use it
+                conn_string = st.secrets.database.url
+            else:
+                # Build URL from individual parameters
+                host = st.secrets.database.get('host', '')
+                port = st.secrets.database.get('port', '5432')
+                dbname = st.secrets.database.get('name', '')
+                user = st.secrets.database.get('user', '')
+                password = st.secrets.database.get('password', '')
+                sslmode = st.secrets.database.get('sslmode', 'require')
+                
+                conn_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
+            
+            conn = psycopg2.connect(conn_string)
             conn.autocommit = True
             cursor = conn.cursor()
             
@@ -4794,7 +4809,19 @@ def show_notification_settings_page():
     # Try to load existing preferences (only if tables were created successfully)
     if tables_created:
         try:
-            conn = psycopg2.connect(st.secrets.database.url)
+            # Build connection string
+            if 'url' in st.secrets.database:
+                conn_string = st.secrets.database.url
+            else:
+                host = st.secrets.database.get('host', '')
+                port = st.secrets.database.get('port', '5432')
+                dbname = st.secrets.database.get('name', '')
+                user = st.secrets.database.get('user', '')
+                password = st.secrets.database.get('password', '')
+                sslmode = st.secrets.database.get('sslmode', 'require')
+                conn_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
+            
+            conn = psycopg2.connect(conn_string)
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
             cursor.execute("""
@@ -4953,7 +4980,20 @@ def show_notification_settings_page():
             # Save to database using direct connection
             try:
                 import psycopg2
-                conn = psycopg2.connect(st.secrets.database.url)
+                
+                # Build connection string
+                if 'url' in st.secrets.database:
+                    conn_string = st.secrets.database.url
+                else:
+                    host = st.secrets.database.get('host', '')
+                    port = st.secrets.database.get('port', '5432')
+                    dbname = st.secrets.database.get('name', '')
+                    user = st.secrets.database.get('user', '')
+                    password = st.secrets.database.get('password', '')
+                    sslmode = st.secrets.database.get('sslmode', 'require')
+                    conn_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
+                
+                conn = psycopg2.connect(conn_string)
                 conn.autocommit = True
                 cursor = conn.cursor()
                 
