@@ -4623,48 +4623,6 @@ def show_profile_page():
     """Display user profile"""
     
     with st.sidebar:
-        # Admin badge (if admin)
-        if st.session_state.role == 'admin':
-            st.markdown("""
-                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
-                     padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
-                     display: inline-block; width: auto;">
-                    <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
-                </div>
-            """, unsafe_allow_html=True)
-        
-        # Username
-        st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
-                    unsafe_allow_html=True)
-        
-        st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
-        
-        # App branding
-        st.markdown(f"""
-            <div style="margin-bottom: 20px;">
-                <div style="font-size: 1.1em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
-                    📊 {APP_NAME}
-                </div>
-                <div style="font-size: 0.85em; color: #64748b;">
-                    {APP_SUBTITLE} v{APP_VERSION.split(' - ')[0]}
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Version Info - Collapsible expander
-        with st.expander("ℹ️ Version Info", expanded=False):
-            st.markdown(f"""
-                **Version:** {APP_VERSION.split(' - ')[0]}  
-                **Released:** {APP_DATE}  
-                **Build:** {APP_VERSION.split(' - ')[1] if ' - ' in APP_VERSION else 'Production'}
-            """)
-            
-            if st.button("📋 View Changelog", use_container_width=True, key="profile_sidebar_changelog"):
-                st.session_state.current_page = "Version"
-                st.rerun()
-        
-        st.divider()
-        
         if st.button("🏠 Back to Home", use_container_width=True, key="profile_back_btn"):
             st.session_state.current_page = "Home"
             st.rerun()
@@ -4728,6 +4686,248 @@ def show_profile_page():
                 st.rerun()
             else:
                 st.error(message)
+
+def show_notification_settings_page():
+    """Display email notification settings"""
+    
+    with st.sidebar:
+        if st.button("🏠 Back to Home", use_container_width=True, key="notif_back_btn"):
+            st.session_state.current_page = "Home"
+            st.rerun()
+        
+        if st.button("🚪 Logout", use_container_width=True, type="secondary", key="notif_logout_btn"):
+            logout_user(st.session_state.session_token)
+            st.session_state.logged_in = False
+            st.session_state.user_id = None
+            st.session_state.username = None
+            st.session_state.email = None
+            st.session_state.role = None
+            st.session_state.session_token = None
+            st.rerun()
+    
+    st.title("📧 Email Notification Settings")
+    
+    st.markdown("""
+        <div class="desc-box">
+            <h4>Control Your Email Notifications</h4>
+            <div style="line-height:1.7; font-weight: 300;">
+                Customize when and how you receive alerts, reminders, and insights from Canadian Tax Optimizer. 
+                We'll only send emails that help you save money and stay on track with your tax planning.
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Get current preferences from database
+    result = execute_query("""
+        SELECT * FROM user_email_preferences WHERE user_id = %s
+    """, (st.session_state.user_id,))
+    
+    if result:
+        prefs = dict(result[0])
+        current_enabled = prefs.get('enabled', True)
+        current_frequency = prefs.get('frequency', 'real_time')
+        current_notifications = prefs.get('preferences', {}).get('notifications', {})
+    else:
+        # Defaults
+        current_enabled = True
+        current_frequency = 'real_time'
+        current_notifications = {
+            'rrsp_deadline': True,
+            'tfsa_overcontribution': True,
+            'penthouse_bracket': True,
+            'employer_match': True,
+            'tax_refund': True
+        }
+    
+    # Master Settings
+    st.markdown("### ⚙️ Master Settings")
+    
+    with st.form("notification_settings_form"):
+        enabled = st.checkbox(
+            "Enable email notifications",
+            value=current_enabled,
+            help="Master switch for all email notifications"
+        )
+        
+        frequency = st.selectbox(
+            "Email frequency",
+            options=['real_time', 'daily', 'weekly'],
+            index=['real_time', 'daily', 'weekly'].index(current_frequency),
+            format_func=lambda x: {
+                'real_time': '⚡ Real-time (immediate)',
+                'daily': '📅 Daily digest (once per day)',
+                'weekly': '📬 Weekly summary (Sundays)'
+            }[x],
+            help="How often you want to receive notifications"
+        )
+        
+        st.divider()
+        
+        # Individual notification toggles
+        st.markdown("### 📬 Notification Types")
+        
+        st.markdown("#### 🚨 Critical Alerts (Highly Recommended)")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            rrsp_deadline = st.checkbox(
+                "⏰ RRSP Deadline Reminders",
+                value=current_notifications.get('rrsp_deadline', True),
+                help="Alerts 7, 3, and 1 day before March 1st deadline"
+            )
+            
+            tfsa_overcontribution = st.checkbox(
+                "🚨 TFSA Over-Contribution Warnings",
+                value=current_notifications.get('tfsa_overcontribution', True),
+                help="Immediate alert when TFSA contribution exceeds room (prevents CRA penalties)"
+            )
+        
+        with col2:
+            penthouse_bracket = st.checkbox(
+                "💰 Tax Bracket Optimization Alerts",
+                value=current_notifications.get('penthouse_bracket', True),
+                help="When taxable income enters Penthouse bracket (47.97% rate)"
+            )
+            
+            employer_match = st.checkbox(
+                "🆓 Employer Match Reminders",
+                value=current_notifications.get('employer_match', True),
+                help="Monthly reminder if not maximizing employer RRSP match"
+            )
+        
+        st.markdown("#### 💡 Strategy & Planning")
+        
+        tax_refund = st.checkbox(
+            "💵 Tax Refund Deployment Guidance",
+            value=current_notifications.get('tax_refund', True),
+            help="Strategic advice on deploying your tax refund to TFSA"
+        )
+        
+        st.divider()
+        
+        # Preview section
+        st.markdown("### 👀 Notification Preview")
+        
+        notification_counts = {
+            'critical': sum([rrsp_deadline, tfsa_overcontribution]),
+            'high': sum([penthouse_bracket, employer_match]),
+            'medium': sum([tax_refund])
+        }
+        
+        total_active = sum(notification_counts.values())
+        
+        if enabled and total_active > 0:
+            col_prev1, col_prev2, col_prev3 = st.columns(3)
+            
+            with col_prev1:
+                st.metric(
+                    "Active Notifications",
+                    total_active,
+                    delta="types enabled",
+                    help="Number of notification types you'll receive"
+                )
+            
+            with col_prev2:
+                est_emails_per_year = 0
+                if rrsp_deadline:
+                    est_emails_per_year += 3  # 3 reminders per year
+                if penthouse_bracket:
+                    est_emails_per_year += 1  # Once if detected
+                if employer_match:
+                    est_emails_per_year += 12  # Monthly
+                if tax_refund:
+                    est_emails_per_year += 1  # Once per year
+                
+                frequency_multiplier = {
+                    'real_time': 1,
+                    'daily': 0.3,
+                    'weekly': 0.15
+                }.get(frequency, 1)
+                
+                est_emails = int(est_emails_per_year * frequency_multiplier)
+                
+                st.metric(
+                    "Est. Emails/Year",
+                    f"~{est_emails}",
+                    delta=frequency.replace('_', ' '),
+                    help=f"Based on your {frequency.replace('_', ' ')} frequency setting"
+                )
+            
+            with col_prev3:
+                st.metric(
+                    "Priority Focus",
+                    "Savings" if notification_counts['critical'] >= 2 else "Balanced",
+                    help="Your notification profile focus"
+                )
+        elif enabled:
+            st.warning("⚠️ No notification types enabled. You won't receive any emails.")
+        else:
+            st.info("ℹ️ Email notifications are disabled. Enable the master switch to receive alerts.")
+        
+        # Save button
+        if st.form_submit_button("💾 Save Notification Settings", use_container_width=True, type="primary"):
+            # Save to database
+            try:
+                execute_query("""
+                    INSERT INTO user_email_preferences (user_id, enabled, frequency, preferences, updated_at)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (user_id) 
+                    DO UPDATE SET 
+                        enabled = EXCLUDED.enabled,
+                        frequency = EXCLUDED.frequency,
+                        preferences = EXCLUDED.preferences,
+                        updated_at = EXCLUDED.updated_at
+                """, (
+                    st.session_state.user_id,
+                    enabled,
+                    frequency,
+                    json.dumps({
+                        'notifications': {
+                            'rrsp_deadline': rrsp_deadline,
+                            'tfsa_overcontribution': tfsa_overcontribution,
+                            'penthouse_bracket': penthouse_bracket,
+                            'employer_match': employer_match,
+                            'tax_refund': tax_refund
+                        }
+                    }),
+                    datetime.now()
+                ), fetch=False)
+                
+                st.success("✅ Notification settings saved successfully!")
+                st.balloons()
+            except Exception as e:
+                st.error(f"❌ Failed to save settings: {e}")
+    
+    # Test email section
+    st.divider()
+    st.markdown("### ✉️ Test Email")
+    
+    st.info("Want to see what our emails look like? Send yourself a test notification!")
+    
+    if st.button("📧 Send Test Email", help="Send a sample notification to verify your email is working"):
+        try:
+            # Send a test TFSA over-contribution alert
+            html, plain, subject = send_tfsa_overcontribution_alert(
+                to_email=st.session_state.email,
+                username=st.session_state.username,
+                year=2025,
+                tfsa_contribution=40000,
+                tfsa_room=33922,
+                excess_amount=6078,
+                monthly_penalty=60.78,
+                annual_penalty=729.36,
+                app_url="https://your-app.streamlit.app"
+            )
+            
+            success, msg = send_email(st.session_state.email, subject, html, plain)
+            
+            if success:
+                st.success(f"✅ Test email sent to {st.session_state.email}! Check your inbox (and spam folder).")
+            else:
+                st.error(f"❌ Failed to send test email: {msg}")
+        except Exception as e:
+            st.error(f"❌ Error sending test email: {e}")
 
 # ============================================================================
 # MAIN APPLICATION (from v5, with auth wrapper)
@@ -4796,6 +4996,10 @@ with st.sidebar:
         st.session_state.current_page = "Profile"
         st.rerun()
     
+    if st.button("📧 Notification Settings", use_container_width=True, key="main_notifications_btn"):
+        st.session_state.current_page = "Notifications"
+        st.rerun()
+    
     if st.button("🚪 Logout", use_container_width=True, type="secondary", key="main_logout_btn"):
         logout_user(st.session_state.session_token)
         st.session_state.logged_in = False
@@ -4821,42 +5025,27 @@ if st.session_state.current_page == "Profile":
     show_profile_page()
     st.stop()
 
+# Show notification settings page if selected
+if st.session_state.current_page == "Notifications":
+    show_notification_settings_page()
+    st.stop()
+
 # Show version info page if selected
 if st.session_state.current_page == "Version":
     # Version Info Page
     with st.sidebar:
-        # Admin badge (if admin)
-        if st.session_state.role == 'admin':
-            st.markdown("""
-                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
-                     padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
-                     display: inline-block; width: auto;">
-                    <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
-                </div>
-            """, unsafe_allow_html=True)
-        
-        # Username
-        st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
-                    unsafe_allow_html=True)
-        
-        st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
-        
-        # App branding
-        st.markdown(f"""
-            <div style="margin-bottom: 20px;">
-                <div style="font-size: 1.1em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
-                    📊 {APP_NAME}
-                </div>
-                <div style="font-size: 0.85em; color: #64748b;">
-                    {APP_SUBTITLE} v{APP_VERSION.split(' - ')[0]}
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        st.divider()
-        
         if st.button("🏠 Back to Home", use_container_width=True, key="version_back_btn"):
             st.session_state.current_page = "Home"
+            st.rerun()
+        
+        if st.button("🚪 Logout", use_container_width=True, type="secondary", key="version_logout_btn"):
+            logout_user(st.session_state.session_token)
+            st.session_state.logged_in = False
+            st.session_state.user_id = None
+            st.session_state.username = None
+            st.session_state.email = None
+            st.session_state.role = None
+            st.session_state.session_token = None
             st.rerun()
     
     st.title(f"ℹ️ {APP_NAME} - Version Info")
