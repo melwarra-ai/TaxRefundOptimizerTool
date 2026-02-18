@@ -63,13 +63,117 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.6.3 - TFSA Calculator Fix"
+APP_VERSION = "6.7.1 - Refund Metric Clarity"
 APP_DATE = "February 18, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.7.1 - Refund Metric Clarity (Feb 18, 2026)
+
+### 🎯 METRIC CLARITY FIX:
+
+**Problem:** "Available for TFSA" metric was confusing when user already planned their refund.
+
+**User Scenario:**
+```
+Entered in sidebar:
+- TFSA Room: $33,922
+- TFSA Lump Sum: $21,107 (equals refund amount)
+
+Metrics showed:
+- Tax Refund Generated: $21,107
+- Available for TFSA: $12,815  ← Confusing! This is AFTER their deposit
+- Deployment Rate: 60.7%  ← Wrong! Should be 100%
+```
+
+**The Confusion:**
+- User entered $21,107 as TFSA deposit (matching their refund)
+- Metric showed "Available: $12,815" which was remaining room AFTER their deposit
+- Made it seem like they couldn't deploy their full refund
+- Percentage showed 60.7% instead of 100% (they deployed it all!)
+
+**Fix Applied:**
+
+**Smart Metric Detection:**
+```python
+# Detect if user already planned to deploy refund
+refund_matches_tfsa = abs(tfsa_lump_sum - estimated_refund) < 5%
+
+if refund_matches_tfsa:
+    # Show what they deployed
+    metric_label = "Refund → TFSA"
+    value = tfsa_lump_sum  # $21,107
+    help = "You've allocated $21,107 to TFSA (matches your refund)"
+else:
+    # Show what COULD be deployed
+    metric_label = "Refund Can Fit"
+    value = min(refund, total_tfsa_room)  # Not remaining room!
+    help = "Amount of refund that fits in total TFSA room"
+```
+
+**After Fix:**
+```
+When user has deployed refund:
+- Tax Refund Generated: $21,107
+- Refund → TFSA: $21,107  ✅ Clear!
+- Deployment Rate: 100%  ✅ Accurate!
+
+When user hasn't deployed yet:
+- Tax Refund Generated: $21,107
+- Refund Can Fit: $21,107  ✅ (or capped at room)
+- Deployment Rate: 100%  ✅ (potential)
+```
+
+**Impact:**
+- ✅ Metrics now match user's actual plan
+- ✅ No more confusion about "remaining" vs "available"
+- ✅ Clear messaging when refund is already allocated
+- ✅ Accurate deployment percentage
+
+---
+
+## 🎉 Version 6.7.0 - Refund Logic Overhaul (Feb 18, 2026)
+
+### 🧠 MAJOR LOGIC FIX - Circular Logic Eliminated!
+
+**Problem:** Refund Deployment Calculator showed confusing/contradictory warnings even when user's plan was correct!
+
+**User Scenario:**
+- User entered: TFSA Room $33,922, TFSA Lump Sum $21,107
+- Tax refund calculated: $21,107
+- Calculator showed: "Available for TFSA: $12,815" with warning about room limit
+- User: "Something is not correct" ✅ CORRECT!
+
+**The Circular Logic Bug:**
+The calculator used REMAINING room ($12,815 AFTER user's $21,107 deposit) instead of recognizing that the user had ALREADY planned to deploy their refund. This created contradictory messaging.
+
+**Root Cause:**
+Calculator assumed TFSA Lump Sum was existing money and refund was ADDITIONAL. But reality: TFSA Lump Sum IS the refund plan!
+
+**Fix Applied:**
+
+1. Detect if TFSA deposit matches refund (within 5% tolerance)
+2. Show SUCCESS message when user has correctly planned refund deployment
+3. Only warn for ACTUAL over-contributions (when deposit exceeds total room)
+4. Guide additional deployment when user has unallocated refund AND room
+
+**After Fix:**
+- When refund matches TFSA deposit: Shows green success message confirming plan
+- When over room: Shows red error with clear action to reduce sidebar value
+- When room available: Shows info message with deployment guidance
+- No more circular logic or contradictory warnings!
+
+**User Scenarios After Fix:**
+- Scenario 1 (Full Refund): Shows success message confirming excellent strategy
+- Scenario 2 (Partial): Shows info about deploying more to TFSA
+- Scenario 3 (Over-Room): Shows error to reduce deposit
+
+**This is a fundamental UX/logic improvement!** 🎯
+
+---
+
 ## 🎉 Version 6.6.3 - TFSA Calculator Fix (Feb 18, 2026)
 
 ### 🚨 CRITICAL BUG FIX - TFSA Over-Contribution Prevention!
@@ -6323,19 +6427,44 @@ else:
         )
     
     with col_refund2:
-        available_for_tfsa = min(estimated_refund, remaining_tfsa_room)
+        # Determine what to show based on user's planning status
+        refund_matches_tfsa = abs(tfsa_lump_sum - estimated_refund) / max(1, estimated_refund) < 0.05
+        
+        if refund_matches_tfsa:
+            # User already planned to deploy refund to TFSA
+            deployment_status = tfsa_lump_sum
+            metric_label = "Refund → TFSA"
+            metric_help = f"You've allocated ${tfsa_lump_sum:,.0f} to TFSA (matches your refund)"
+        else:
+            # Show how much refund COULD go to TFSA (considering total room, not remaining)
+            # This is how much of the refund fits in TOTAL TFSA room (before any deposits)
+            max_refund_to_tfsa = min(estimated_refund, tfsa_room)
+            deployment_status = max_refund_to_tfsa
+            metric_label = "Refund Can Fit"
+            metric_help = f"Amount of ${estimated_refund:,.0f} refund that fits in ${tfsa_room:,.0f} TFSA room"
+        
         st.metric(
-            "Available for TFSA",
-            f"${available_for_tfsa:,.0f}",
-            help="Refund amount that fits in remaining TFSA room"
+            metric_label,
+            f"${deployment_status:,.0f}",
+            help=metric_help
         )
     
     with col_refund3:
-        reinvest_pct = (available_for_tfsa / max(1, estimated_refund)) * 100
+        # Calculate reinvestment rate based on deployment status
+        if refund_matches_tfsa:
+            # They've allocated their refund to TFSA
+            reinvest_pct = min(100, (tfsa_lump_sum / max(1, estimated_refund)) * 100)
+            metric_help = f"{reinvest_pct:.1f}% of refund allocated to TFSA"
+        else:
+            # Show potential if they fully deployed
+            max_deployment = min(estimated_refund, tfsa_room)
+            reinvest_pct = (max_deployment / max(1, estimated_refund)) * 100
+            metric_help = f"Up to {reinvest_pct:.1f}% of refund can go to TFSA"
+        
         st.metric(
-            "Reinvestment Rate",
+            "Deployment Rate",
             f"{reinvest_pct:.1f}%",
-            help="Percentage of refund deployable to TFSA"
+            help=metric_help
         )
     
     # Refund deployment calculator
@@ -6343,64 +6472,87 @@ else:
         st.markdown("**Strategic Question:** How much of your tax refund will you reinvest into your TFSA?")
         
         if estimated_refund > 0:
-            # Check if refund exceeds available TFSA room
-            can_deploy_full_refund = estimated_refund <= remaining_tfsa_room
-            max_deployable = min(float(estimated_refund), float(remaining_tfsa_room))
+            # Check if user has already planned to use refund for TFSA (within 5% tolerance)
+            refund_already_planned = abs(tfsa_lump_sum - estimated_refund) / max(1, estimated_refund) < 0.05
             
-            # Show warning if can't deploy full refund
-            if not can_deploy_full_refund:
-                excess_refund = estimated_refund - remaining_tfsa_room
-                st.warning(f"""
-                    ⚠️ **TFSA Room Limit**: You have ${remaining_tfsa_room:,.0f} TFSA room remaining, 
-                    but your tax refund is ${estimated_refund:,.0f}. 
+            if refund_already_planned:
+                # User's TFSA contribution matches their refund - they've already planned it!
+                if tfsa_lump_sum <= tfsa_room:
+                    st.success(f"""
+                        ✅ **Refund Deployment Planned**: You've allocated ${tfsa_lump_sum:,.0f} to TFSA, 
+                        which matches your estimated tax refund of ${estimated_refund:,.0f}.
+                        
+                        This fits within your ${tfsa_room:,.0f} TFSA room, leaving ${remaining_tfsa_room:,.0f} available.
+                        
+                        **This is an excellent tax-efficient strategy!** 🎯
+                    """)
+                else:
+                    # They planned to use full refund but it exceeds room
+                    excess = tfsa_lump_sum - tfsa_room
+                    st.error(f"""
+                        🚨 **Over-Contribution Alert**: Your planned TFSA contribution (${tfsa_lump_sum:,.0f}) 
+                        exceeds your available room (${tfsa_room:,.0f}) by ${excess:,.0f}.
+                        
+                        **Action needed:** Reduce "TFSA Lump Sum Deposit" in sidebar to ${tfsa_room:,.0f} or less.
+                        
+                        ⚠️ CRA charges 1% per month penalty on TFSA over-contributions!
+                    """)
+                
+                # Show what they've planned
+                st.markdown("**Your Current Plan:**")
+                st.write(f"- Tax refund: ${estimated_refund:,.0f}")
+                st.write(f"- Planned TFSA deposit: ${tfsa_lump_sum:,.0f}")
+                st.write(f"- TFSA room: ${tfsa_room:,.0f}")
+                st.write(f"- Remaining room: ${remaining_tfsa_room:,.0f}")
+                
+            else:
+                # User hasn't fully deployed refund to TFSA - show planning calculator
+                # Calculate how much MORE they could deploy (on top of current TFSA contribution)
+                additional_room = max(0, remaining_tfsa_room)
+                can_deploy_more = additional_room > 0 and estimated_refund > tfsa_lump_sum
+                
+                if not can_deploy_more or additional_room == 0:
+                    st.info(f"""
+                        ℹ️ **No Additional TFSA Room**: You've already planned ${tfsa_lump_sum:,.0f} for TFSA.
+                        Your TFSA room is ${tfsa_room:,.0f}, leaving ${additional_room:,.0f} remaining.
+                        
+                        Your tax refund of ${estimated_refund:,.0f} could be used for:
+                        - Additional TFSA (if room available): ${additional_room:,.0f}
+                        - Non-registered investments: ${max(0, estimated_refund - additional_room):,.0f}
+                        - Other savings goals
+                    """)
+                else:
+                    # They have room and refund available
+                    refund_not_yet_allocated = max(0, estimated_refund - tfsa_lump_sum)
+                    max_additional = min(refund_not_yet_allocated, additional_room)
                     
-                    You can deploy up to ${remaining_tfsa_room:,.0f} to TFSA. 
-                    The remaining ${excess_refund:,.0f} should go to a non-registered account or be used for other purposes.
-                """)
+                    st.info(f"""
+                        💡 **Additional Deployment Available**: 
+                        - Current TFSA plan: ${tfsa_lump_sum:,.0f}
+                        - Tax refund: ${estimated_refund:,.0f}
+                        - Unallocated refund: ${refund_not_yet_allocated:,.0f}
+                        - Additional TFSA room: ${additional_room:,.0f}
+                        
+                        You could deploy up to ${max_additional:,.0f} more to TFSA.
+                    """)
+                    
+                    st.markdown("**Tip:** Adjust 'TFSA Lump Sum Deposit' in the sidebar to plan your full refund deployment.")
             
-            refund_to_deploy = st.slider(
-                "Amount to reinvest in TFSA",
-                0.0,
-                max_deployable,  # FIX: Cap at remaining TFSA room, not full refund!
-                value=max_deployable,
-                step=100.0,
-                help=f"Maximum: ${max_deployable:,.0f} (limited by TFSA room)"
-            )
+            # 20-Year Growth Projection (always show based on current TFSA plan)
+            st.markdown("**20-Year Growth Projection (Current TFSA Plan):**")
+            growth_rate = 0.07
+            years = 20
+            future_value = tfsa_lump_sum * ((1 + growth_rate) ** years)
+            tax_saved_at_withdrawal = future_value * marginal_rate
             
-            st.caption(f"Selected amount: ${refund_to_deploy:,.0f}")
-            
-            # Show what happens to excess refund if any
-            if estimated_refund > refund_to_deploy:
-                refund_excess = estimated_refund - refund_to_deploy
-                st.info(f"💡 **Remaining refund:** ${refund_excess:,.0f} will be available for other savings/investments or spending.")
-            
-            col_deploy1, col_deploy2 = st.columns(2)
-            
-            with col_deploy1:
-                st.markdown("**Deployment Impact:**")
-                new_tfsa_total = tfsa_lump_sum + refund_to_deploy
-                new_tfsa_room = max(0, tfsa_room - new_tfsa_total)
+            col_proj1, col_proj2, col_proj3 = st.columns(3)
+            with col_proj1:
+                st.metric("TFSA Deposit", f"${tfsa_lump_sum:,.0f}")
+            with col_proj2:
+                st.metric("Future Value @ 7%", f"${future_value:,.0f}")
+            with col_proj3:
+                st.metric("Tax Saved (vs. taxable)", f"${tax_saved_at_withdrawal:,.0f}")
                 
-                # Add validation check
-                if new_tfsa_total > tfsa_room:
-                    st.error(f"🚨 **ERROR**: Total TFSA ${new_tfsa_total:,.0f} exceeds room ${tfsa_room:,.0f}!")
-                    st.stop()
-                
-                st.write(f"- Total TFSA contribution: ${new_tfsa_total:,.0f}")
-                st.write(f"- Remaining TFSA room: ${new_tfsa_room:,.0f}")
-                st.write(f"- Combined tax-advantaged savings: ${total_rrsp_contributions + new_tfsa_total:,.0f}")
-            
-            with col_deploy2:
-                st.markdown("**20-Year Growth Projection:**")
-                # Assuming 7% annual return
-                growth_rate = 0.07
-                years = 20
-                future_value = refund_to_deploy * ((1 + growth_rate) ** years)
-                tax_saved_at_withdrawal = future_value * marginal_rate
-                
-                st.write(f"- Refund deployed: ${refund_to_deploy:,.0f}")
-                st.write(f"- Future value @ 7%: ${future_value:,.0f}")
-                st.write(f"- Tax saved (vs. taxable): ${tax_saved_at_withdrawal:,.0f}")
         else:
             st.info("💡 Make RRSP contributions to generate a tax refund that can be reinvested into your TFSA for tax-free growth.")
     
