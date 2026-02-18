@@ -5138,13 +5138,52 @@ def show_notification_settings_page():
     st.divider()
     st.markdown("### ✉️ Test Email")
     
-    st.info("Want to see what our emails look like? Send yourself a test notification!")
+    st.info("💡 **Tip:** Save your settings first, then test! The test email will be sent to your configured notification email address.")
     
     if st.button("📧 Send Test Email", help="Send a sample notification to verify your email is working"):
         try:
+            # Load the notification email from database (what user just saved)
+            test_email = None
+            
+            try:
+                # Build connection string
+                if 'url' in st.secrets.database:
+                    conn_string = st.secrets.database.url
+                else:
+                    host = st.secrets.database.get('host', '')
+                    port = st.secrets.database.get('port', '5432')
+                    dbname = st.secrets.database.get('name', '')
+                    user = st.secrets.database.get('user', '')
+                    password = st.secrets.database.get('password', '')
+                    sslmode = st.secrets.database.get('sslmode', 'require')
+                    conn_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
+                
+                conn = psycopg2.connect(conn_string)
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                
+                cursor.execute("""
+                    SELECT notification_email 
+                    FROM user_email_preferences 
+                    WHERE user_id = %s
+                """, (st.session_state.user_id,))
+                
+                result = cursor.fetchone()
+                cursor.close()
+                conn.close()
+                
+                if result and result.get('notification_email'):
+                    test_email = result['notification_email']
+                else:
+                    # Fall back to login email if not saved yet
+                    test_email = st.session_state.email
+                    
+            except Exception as e:
+                # Fall back to login email if database query fails
+                test_email = st.session_state.email
+            
             # Send a test TFSA over-contribution alert
             html, plain, subject = send_tfsa_overcontribution_alert(
-                to_email=st.session_state.email,
+                to_email=test_email,
                 username=st.session_state.username,
                 year=2025,
                 tfsa_contribution=40000,
@@ -5152,13 +5191,13 @@ def show_notification_settings_page():
                 excess_amount=6078,
                 monthly_penalty=60.78,
                 annual_penalty=729.36,
-                app_url="https://your-app.streamlit.app"
+                app_url=st.secrets.email.get('base_url', 'https://your-app.streamlit.app')
             )
             
-            success, msg = send_email(st.session_state.email, subject, html, plain)
+            success, msg = send_email(test_email, subject, html, plain)
             
             if success:
-                st.success(f"✅ Test email sent to {st.session_state.email}! Check your inbox (and spam folder).")
+                st.success(f"✅ Test email sent to **{test_email}**! Check your inbox (and spam folder).")
             else:
                 st.error(f"❌ Failed to send test email: {msg}")
         except Exception as e:
