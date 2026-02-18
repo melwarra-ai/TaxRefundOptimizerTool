@@ -63,13 +63,88 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.5.8 - Visual Polish"
+APP_VERSION = "6.5.9 - Analytics Explanations"
 APP_DATE = "February 18, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.5.9 - Analytics Explanations (Feb 18, 2026)
+
+### 📚 EDUCATIONAL IMPROVEMENTS:
+
+**Problem:** Charts in "Multi-Year Analytics & Trends" section had no explanations - users didn't know how to read them!
+
+**User Request:**
+1. "Add detail sections for each chart to explain what it means and how to read it"
+2. "In 2029 projection it says 100% used in 2028, but home page shows $54,440 remaining - is this correct?"
+
+**Issue #1 - Missing Chart Explanations:**
+Added collapsible "📖 How to Read This Chart" expanders under each analytics chart:
+
+✅ **RRSP Room Utilization Chart**
+- What green/gray portions mean
+- Why it matters (missed growth opportunity)
+- Goal: maximize green, minimize gray
+- Example with actual numbers
+
+✅ **TFSA Room Utilization Chart**
+- What blue/gray portions mean
+- Why TFSA is special (tax-FREE forever!)
+- Strategy tip: deploy RRSP refunds here
+
+✅ **Income vs. Tax-Shielded Income Chart**
+- Gray bars = gross income
+- Blue bars = taxable income
+- Gap = tax shield value
+- Example tax savings calculation
+
+✅ **Remaining Room Trajectory Chart**
+- Shows end-of-year room availability
+- Why room carries forward matters
+- What upward/downward/flat trends mean
+- CRA's annual room additions explained
+
+✅ **Annual Contribution Trends Chart**
+- Blue line = RRSP contributions
+- Green line = TFSA contributions
+- What trends reveal about your savings discipline
+- Goal patterns to look for
+
+**Issue #2 - Year Confusion Fixed:**
+
+The user was comparing data from DIFFERENT YEARS:
+- **2028 Year View** → Shows "100% used in 2028" → Projects 2029 room
+- **Home Page (2026)** → Shows "$54,440 remaining in 2026"
+
+These are correct but confusing because they're different years!
+
+**Fixes Applied:**
+
+1. **Contribution Room Utilization (Home Page):**
+```python
+# OLD:
+st.caption(f"Visual overview of your {datetime.now().year} contribution space usage")
+
+# NEW:
+st.info(f"📅 **Showing {current_year} contribution data.** [Click any year below to view/edit that year's plan]")
+```
+
+2. **Carryover Room Projection (Year View):**
+```python
+# Added clarification:
+st.info(f"📌 **Note:** This projection is for {selected_year + 1} based on {selected_year} usage. "
+       f"Your current year ({datetime.now().year}) room is shown on the Home page.")
+```
+
+**After Fix:**
+- Home page clearly states: "📅 Showing 2026 contribution data"
+- Year View projection clearly states: "This is 2029 based on 2028 usage"
+- Users won't confuse data from different years
+
+---
+
 ## 🎉 Version 6.5.8 - Visual Polish (Feb 18, 2026)
 
 ### 🎨 UI/UX FIX:
@@ -3400,15 +3475,16 @@ if st.session_state.current_page == "Home":
         # CONTRIBUTION PROGRESS BARS - Shows CURRENT YEAR (2026)
         # ===================================================================
         
-        st.markdown("### 📊 Contribution Room Utilization")
-        st.caption(f"Visual overview of your {datetime.now().year} contribution space usage")
-        st.markdown("")
+        st.markdown(f"### 📊 Contribution Room Utilization")
         
-        # Get CURRENT YEAR data (2026) for progress bars
+        # Get CURRENT YEAR data for progress bars
         current_year = str(datetime.now().year)
         current_year_data = all_history.get(current_year, None)
         
         if current_year_data:
+            # Prominently show which year this data is for
+            st.info(f"📅 **Showing {current_year} contribution data.** [Click any year below to view/edit that year's plan]")
+            st.markdown("")
             rrsp_room = current_year_data.get('rrsp_room', 0)
             tfsa_room = current_year_data.get('tfsa_room', 0)
             
@@ -4453,6 +4529,27 @@ if st.session_state.current_page == "Home":
             total_available = rrsp_burndown['Amount'].sum()
             utilization = (total_used / total_available * 100) if total_available > 0 else 0
             st.metric("Avg RRSP Utilization", f"{utilization:.1f}%")
+            
+            # Explanation
+            with st.expander("📖 How to Read This Chart"):
+                st.markdown("""
+                **What this shows:**
+                - Each bar represents one year's RRSP contribution room
+                - **Green portion** = Room you USED (contributions made) ✅
+                - **Gray portion** = Room left UNUSED (missed opportunity)
+                
+                **Why it matters:**
+                - Unused RRSP room accumulates year over year
+                - BUT you miss years of tax-deferred growth
+                - Higher green bars = better tax efficiency
+                
+                **Goal:** Maximize green, minimize gray
+                
+                **Example:**
+                - Total bar height = $50,000 available room
+                - Green = $35,000 used (70% utilization)
+                - Gray = $15,000 unused (carries forward to next year)
+                """)
         
         with col_burn2:
             st.markdown("**TFSA Room Utilization**")
@@ -4483,6 +4580,27 @@ if st.session_state.current_page == "Home":
             total_available = tfsa_burndown['Amount'].sum()
             utilization = (total_used / total_available * 100) if total_available > 0 else 0
             st.metric("Avg TFSA Utilization", f"{utilization:.1f}%")
+            
+            # Explanation
+            with st.expander("📖 How to Read This Chart"):
+                st.markdown("""
+                **What this shows:**
+                - Each bar represents one year's TFSA contribution room
+                - **Blue portion** = Room you USED (contributions made) ✅
+                - **Gray portion** = Room left UNUSED (missed opportunity)
+                
+                **Why it matters:**
+                - Unused TFSA room accumulates forever
+                - BUT you miss years of tax-FREE growth
+                - Every dollar grows completely tax-free
+                - No tax on withdrawals, ever!
+                
+                **Goal:** Maximize blue to accelerate tax-free wealth
+                
+                **Strategy tip:**
+                - Deploy your RRSP tax refunds here
+                - RRSP → Tax refund → TFSA = Double benefit
+                """)
         
         st.divider()
         
@@ -4511,6 +4629,28 @@ if st.session_state.current_page == "Home":
             ).properties(height=320)
             
             st.altair_chart(income_chart, use_container_width=True)
+            
+            # Explanation
+            with st.expander("📖 How to Read This Chart"):
+                st.markdown("""
+                **What this shows:**
+                - **Gray bars** = Your total gross income (before RRSP deductions)
+                - **Blue bars** = Your taxable income (after RRSP deductions)
+                - **Gap between bars** = Income you've shielded from taxes
+                
+                **Why it matters:**
+                - Bigger gap = more tax savings
+                - RRSP contributions reduce taxable income
+                - Lower taxable income = lower taxes paid
+                
+                **Goal:** Keep blue bars below $181,440 (Penthouse threshold)
+                
+                **Example:**
+                - Gray bar: $210,000 (gross income)
+                - Blue bar: $181,440 (taxable income)
+                - Gap: $28,560 (shielded via RRSP)
+                - Tax saved: $28,560 × 47.97% = $13,704!
+                """)
         
         with col_right:
             st.markdown("**Remaining Room Trajectory**")
@@ -4531,6 +4671,30 @@ if st.session_state.current_page == "Home":
             ).properties(height=320)
             
             st.altair_chart(room_chart, use_container_width=True)
+            
+            # Explanation
+            with st.expander("📖 How to Read This Chart"):
+                st.markdown("""
+                **What this shows:**
+                - Amount of contribution room REMAINING at end of each year
+                - **Blue area** = RRSP room still available
+                - **Green area** = TFSA room still available
+                
+                **Why it matters:**
+                - Shows your unused contribution capacity
+                - Room carries forward to future years
+                - BUT you miss years of tax-advantaged growth
+                
+                **What to look for:**
+                - **Downward trends** = Normal (using room each year)
+                - **Flat lines** = Not contributing (room accumulating)
+                - **Upward trends** = New room added faster than used
+                
+                **Remember:**
+                - CRA adds new RRSP room each year (18% of income, max $31,560)
+                - CRA adds new TFSA room each year ($7,000 in 2025)
+                - Unused room never expires!
+                """)
         
         # Contribution trends
         st.markdown("### 📊 Annual Contribution Trends")
@@ -4556,6 +4720,33 @@ if st.session_state.current_page == "Home":
         ).properties(height=300)
         
         st.altair_chart(contrib_chart, use_container_width=True)
+        
+        # Explanation
+        with st.expander("📖 How to Read This Chart"):
+            st.markdown("""
+            **What this shows:**
+            - Your yearly contribution amounts over time
+            - **Blue line** = RRSP contributions (includes employer match)
+            - **Green line** = TFSA contributions
+            - **Dots** = Actual contribution amount for that year
+            
+            **Why it matters:**
+            - Shows your savings discipline over time
+            - Reveals contribution patterns and trends
+            - Helps you spot years where you under-saved
+            
+            **What to look for:**
+            - **Upward trends** = Increasing contributions (great!)
+            - **Flat lines** = Consistent contributions (disciplined)
+            - **Downward trends** = Decreasing contributions (investigate why)
+            - **Gaps/dips** = Years you under-contributed
+            
+            **Goal:**
+            - Steady or increasing trend over time
+            - RRSP line should grow with income
+            - TFSA line shows refund reinvestment strategy
+            """)
+
 # --- 6. PAGE: YEAR VIEW ---
 else:
     selected_year = st.session_state.selected_year
@@ -5995,9 +6186,15 @@ else:
     
     description_box(
         "Forward-Looking Planning",
-        f"Based on CRA's indexed limits and your {selected_year} contributions, "
-        "here's your projected contribution room for next year."
+        f"Based on CRA's indexed limits and your **{selected_year} contributions**, "
+        f"here's your projected contribution room for **{selected_year + 1}**. "
+        f"This calculates how much room you'll have NEXT YEAR based on what you used THIS YEAR."
     )
+    
+    # Add clarification note
+    st.info(f"📌 **Note:** This projection is for {selected_year + 1} based on {selected_year} usage. "
+           f"Your current year ({datetime.now().year}) room is shown on the Home page.")
+    st.markdown("")
     
     # RRSP new room calculation (18% of income, max $31,560 for 2025)
     rrsp_earned_room = min(31560, total_gross_income * 0.18)
