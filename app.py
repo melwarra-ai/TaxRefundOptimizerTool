@@ -3948,10 +3948,12 @@ def show_admin_dashboard():
         try:
             users_query = """
                 SELECT u.user_id, u.username, u.email, u.role, u.is_active, u.created_at, u.last_login,
+                       COALESCE(uep.notification_email, u.email) as notification_email,
                        COUNT(t.record_id) as planning_years
                 FROM users u
+                LEFT JOIN user_email_preferences uep ON u.user_id = uep.user_id
                 LEFT JOIN tax_planning_years t ON u.user_id = t.user_id
-                GROUP BY u.user_id
+                GROUP BY u.user_id, u.username, u.email, u.role, u.is_active, u.created_at, u.last_login, uep.notification_email
                 ORDER BY u.created_at DESC
             """
             users = execute_query(users_query)
@@ -3990,6 +3992,11 @@ def show_admin_dashboard():
                     col_card1, col_card2 = st.columns([4, 1])
                     
                     with col_card1:
+                        # Show both emails if different
+                        email_display = f"{user['notification_email']}"
+                        if user['email'] != user['notification_email']:
+                            email_display = f"📧 {user['notification_email']}<br><span style='font-size: 0.85em; color: #94a3b8;'>🔑 Login: {user['email']}</span>"
+                        
                         st.markdown(f"""
                             <div style="background: white; border-radius: 12px; padding: 24px; 
                                  border: 1px solid #e2e8f0; margin-bottom: 16px; transition: all 0.3s ease;
@@ -4002,7 +4009,7 @@ def show_admin_dashboard():
                                 </div>
                                 <div style="margin: 12px 0; color: #64748b; line-height: 1.6;">
                                     <div style="margin: 6px 0;">
-                                        <strong style="color: #475569;">Email:</strong> {user['email']}
+                                        <strong style="color: #475569;">Email:</strong> {email_display}
                                     </div>
                                     <div style="margin: 6px 0;">
                                         <strong style="color: #475569;">Role:</strong> 
@@ -5362,72 +5369,171 @@ def show_notification_settings_page():
     
     # Test email section
     st.divider()
-    st.markdown("### ✉️ Test Email")
+    st.markdown("### ✉️ Test Email & SMTP Diagnostics")
+    
+    # v6.9.0: SMTP Configuration Diagnostics
+    with st.expander("🔧 SMTP Configuration Status", expanded=False):
+        st.markdown("**Check your email configuration before sending test:**")
+        
+        smtp_config = get_smtp_config()
+        
+        col_diag1, col_diag2 = st.columns(2)
+        
+        with col_diag1:
+            st.markdown("**Configuration Status:**")
+            if smtp_config.get('enabled'):
+                st.success("✅ Email system enabled")
+            else:
+                st.error("❌ Email system DISABLED - Enable in secrets")
+            
+            if smtp_config.get('smtp_server'):
+                st.success(f"✅ SMTP Server: {smtp_config['smtp_server']}")
+            else:
+                st.error("❌ SMTP Server not configured")
+            
+            if smtp_config.get('smtp_port'):
+                st.success(f"✅ SMTP Port: {smtp_config['smtp_port']}")
+            else:
+                st.warning("⚠️ SMTP Port not set (will use default 587)")
+        
+        with col_diag2:
+            st.markdown("**Credentials Status:**")
+            if smtp_config.get('smtp_username'):
+                st.success(f"✅ Username: {smtp_config['smtp_username'][:5]}***")
+            else:
+                st.error("❌ SMTP Username not configured")
+            
+            if smtp_config.get('smtp_password'):
+                st.success("✅ Password: ****** (configured)")
+            else:
+                st.error("❌ SMTP Password not configured")
+            
+            if smtp_config.get('from_email'):
+                st.success(f"✅ From Email: {smtp_config['from_email']}")
+            else:
+                st.error("❌ From Email not configured")
+        
+        st.markdown("---")
+        st.markdown("**Expected secrets.toml format:**")
+        st.code('''[email]
+enabled = true
+smtp_server = "smtp.gmail.com"
+smtp_port = 587
+smtp_username = "your-email@gmail.com"
+smtp_password = "your-app-password"
+from_email = "your-email@gmail.com"
+from_name = "Canadian Tax Optimizer"
+base_url = "https://your-app.streamlit.app"
+''', language='toml')
+        
+        st.info("""
+            💡 **Gmail Users:**
+            1. Go to Google Account → Security
+            2. Enable 2-Factor Authentication
+            3. Generate an "App Password"
+            4. Use the app password (not your regular password) in secrets
+        """)
     
     st.info("💡 **Tip:** Save your settings first, then test! The test email will be sent to your configured notification email address.")
     
     if st.button("📧 Send Test Email", help="Send a sample notification to verify your email is working"):
-        try:
-            # Load the notification email from database (what user just saved)
-            test_email = None
-            
+        # First check SMTP configuration
+        smtp_config = get_smtp_config()
+        if not smtp_config.get('enabled'):
+            st.error("""
+                ❌ **Email system is DISABLED**
+                
+                To enable email notifications:
+                1. Add email configuration to your secrets.toml file
+                2. Set `enabled = true` in the [email] section
+                3. Restart the app
+                
+                Expand "🔧 SMTP Configuration Status" above for details.
+            """)
+        else:
             try:
-                # Build connection string
-                if 'url' in st.secrets.database:
-                    conn_string = st.secrets.database.url
-                else:
-                    host = st.secrets.database.get('host', '')
-                    port = st.secrets.database.get('port', '5432')
-                    dbname = st.secrets.database.get('name', '')
-                    user = st.secrets.database.get('user', '')
-                    password = st.secrets.database.get('password', '')
-                    sslmode = st.secrets.database.get('sslmode', 'require')
-                    conn_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
+                # Load the notification email from database (what user just saved)
+                test_email = None
                 
-                conn = psycopg2.connect(conn_string)
-                cursor = conn.cursor(cursor_factory=RealDictCursor)
-                
-                cursor.execute("""
-                    SELECT notification_email 
-                    FROM user_email_preferences 
-                    WHERE user_id = %s
-                """, (st.session_state.user_id,))
-                
-                result = cursor.fetchone()
-                cursor.close()
-                conn.close()
-                
-                if result and result.get('notification_email'):
-                    test_email = result['notification_email']
-                else:
-                    # Fall back to login email if not saved yet
-                    test_email = st.session_state.email
+                try:
+                    # Build connection string
+                    if 'url' in st.secrets.database:
+                        conn_string = st.secrets.database.url
+                    else:
+                        host = st.secrets.database.get('host', '')
+                        port = st.secrets.database.get('port', '5432')
+                        dbname = st.secrets.database.get('name', '')
+                        user = st.secrets.database.get('user', '')
+                        password = st.secrets.database.get('password', '')
+                        sslmode = st.secrets.database.get('sslmode', 'require')
+                        conn_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
                     
+                    conn = psycopg2.connect(conn_string)
+                    cursor = conn.cursor(cursor_factory=RealDictCursor)
+                    
+                    cursor.execute("""
+                        SELECT notification_email 
+                        FROM user_email_preferences 
+                        WHERE user_id = %s
+                    """, (st.session_state.user_id,))
+                    
+                    result = cursor.fetchone()
+                    cursor.close()
+                    conn.close()
+                    
+                    if result and result.get('notification_email'):
+                        test_email = result['notification_email']
+                    else:
+                        # Fall back to login email if not saved yet
+                        test_email = st.session_state.email
+                        
+                except Exception as e:
+                    # Fall back to login email if database query fails
+                    test_email = st.session_state.email
+                
+                # Validate test email
+                is_valid, validation_warning = validate_email_address(test_email)
+                if not is_valid:
+                    st.error(f"❌ Cannot send test email: {validation_warning}")
+                elif validation_warning:
+                    st.warning(f"{validation_warning}")
+                    st.info(f"📧 Attempting to send to: **{test_email}** (note: this may not be a real email)")
+                
+                # Send a test TFSA over-contribution alert
+                with st.spinner(f"Sending test email to {test_email}..."):
+                    html, plain, subject = send_tfsa_overcontribution_alert(
+                        to_email=test_email,
+                        username=st.session_state.username,
+                        year=2025,
+                        tfsa_contribution=40000,
+                        tfsa_room=33922,
+                        excess_amount=6078,
+                        monthly_penalty=60.78,
+                        annual_penalty=729.36,
+                        app_url=st.secrets.email.get('base_url', 'https://your-app.streamlit.app')
+                    )
+                    
+                    success, msg = send_email(test_email, subject, html, plain)
+                
+                if success:
+                    st.success(f"✅ Test email sent to **{test_email}**! Check your inbox (and spam folder).")
+                    st.balloons()
+                else:
+                    st.error(f"❌ Failed to send test email")
+                    st.error(f"**Error details:** {msg}")
+                    st.info("""
+                        **Common issues:**
+                        - Wrong SMTP username or password
+                        - Gmail requires "App Password" (not regular password)
+                        - SMTP server or port incorrect
+                        - Firewall blocking outgoing SMTP connections
+                        
+                        Check "🔧 SMTP Configuration Status" above for details.
+                    """)
             except Exception as e:
-                # Fall back to login email if database query fails
-                test_email = st.session_state.email
-            
-            # Send a test TFSA over-contribution alert
-            html, plain, subject = send_tfsa_overcontribution_alert(
-                to_email=test_email,
-                username=st.session_state.username,
-                year=2025,
-                tfsa_contribution=40000,
-                tfsa_room=33922,
-                excess_amount=6078,
-                monthly_penalty=60.78,
-                annual_penalty=729.36,
-                app_url=st.secrets.email.get('base_url', 'https://your-app.streamlit.app')
-            )
-            
-            success, msg = send_email(test_email, subject, html, plain)
-            
-            if success:
-                st.success(f"✅ Test email sent to **{test_email}**! Check your inbox (and spam folder).")
-            else:
-                st.error(f"❌ Failed to send test email: {msg}")
-        except Exception as e:
-            st.error(f"❌ Error sending test email: {e}")
+                st.error(f"❌ Error sending test email")
+                st.error(f"**Exception:** {str(e)}")
+                st.info("Check your SMTP configuration in secrets.toml file.")
 
 # ============================================================================
 # MAIN APPLICATION (from v5, with auth wrapper)
@@ -5444,12 +5550,51 @@ all_history = load_all_data(st.session_state.user_id)
 
 # v6.9.0: Admin Email Setup Warning - Show if admin is using fake/test email
 if st.session_state.role == 'admin':
-    is_valid, warning = validate_email_address(st.session_state.email)
+    # Query database to get saved notification_email
+    notification_email_to_check = st.session_state.email  # Default to login email
+    
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        
+        # Build connection string
+        if 'url' in st.secrets.database:
+            conn_string = st.secrets.database.url
+        else:
+            host = st.secrets.database.get('host', '')
+            port = st.secrets.database.get('port', '5432')
+            dbname = st.secrets.database.get('name', '')
+            user = st.secrets.database.get('user', '')
+            password = st.secrets.database.get('password', '')
+            sslmode = st.secrets.database.get('sslmode', 'require')
+            conn_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
+        
+        conn = psycopg2.connect(conn_string)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT notification_email 
+            FROM user_email_preferences 
+            WHERE user_id = %s
+        """, (st.session_state.user_id,))
+        
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if result and result.get('notification_email'):
+            notification_email_to_check = result['notification_email']
+    except Exception:
+        # If query fails, fall back to login email
+        pass
+    
+    # Now check the actual notification email (either saved or login)
+    is_valid, warning = validate_email_address(notification_email_to_check)
     if warning:
         st.warning(f"""
             ⚠️ **Admin Action Required: Set Real Email Address**
             
-            Your admin account is using a test/placeholder email: `{st.session_state.email}`
+            Your notification email is set to: `{notification_email_to_check}`
             
             **Why this matters:**
             - You won't receive admin notifications (new users, milestones, alerts)
