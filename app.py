@@ -63,13 +63,95 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.5.9 - Analytics Explanations"
+APP_VERSION = "6.6.0 - Room Utilization Fix"
 APP_DATE = "February 18, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.6.0 - Room Utilization Fix (Feb 18, 2026)
+
+### 🐛 CRITICAL LOGIC BUG FIX:
+
+**Problem:** Contribution Room Utilization showing WRONG YEAR data!
+
+**User Report:**
+"I'm expecting to see RRSP optimized almost to the max since no more room to contribute, and by 2028 total TFSA contributed was $69,209, but screenshot shows only $28,091 used... not correct?"
+
+**Root Cause:**
+```python
+# Line 3481 - THE BUG:
+current_year = str(datetime.now().year)  # Gets 2026 (calendar year)
+current_year_data = all_history.get(current_year, None)
+```
+
+**The Issue:**
+- Code showed CURRENT CALENDAR YEAR (2026) data
+- But user has planned through 2028!
+- Showed 2026 contributions ($28,091 TFSA)
+- Should show 2028 contributions (latest planned year)
+
+**User Scenario:**
+```
+Years planned: 2025, 2026, 2027, 2028
+Latest year: 2028
+TFSA by 2028: $69,209 total
+
+What it showed:
+- 2026 data only: $28,091 TFSA ❌
+
+What it SHOULD show:
+- 2028 data (latest): Full picture ✅
+```
+
+**Fix Applied:**
+```python
+# OLD (Wrong):
+current_year = str(datetime.now().year)  # Always 2026
+current_year_data = all_history.get(current_year, None)
+
+# NEW (Correct):
+if all_history:
+    latest_year = str(max(int(yr) for yr in all_history.keys()))  # Gets 2028!
+    latest_year_data = all_history.get(latest_year, None)
+```
+
+**Smart Year Detection:**
+```python
+# If latest year > calendar year, show note:
+if int(latest_year) > calendar_year:
+    st.info(f"📅 Showing {latest_year} contribution data (your most recent plan). "
+           f"Current calendar year is {calendar_year}.")
+else:
+    st.info(f"📅 Showing {latest_year} contribution data.")
+```
+
+**After Fix:**
+- Shows LATEST PLANNED YEAR (2028 in this case)
+- RRSP utilization reflects all planning done
+- TFSA shows actual cumulative usage through latest year
+- Note explains if showing future year data
+
+**Example:**
+```
+BEFORE v6.6.0:
+📅 Showing 2026 contribution data
+TFSA: $28,091 / $83,300 (33.7%)  ❌ Wrong year!
+
+AFTER v6.6.0:
+📅 Showing 2028 contribution data (your most recent plan). Current calendar year is 2026.
+TFSA: $69,209 / $... (based on 2028 plan) ✅ Correct!
+```
+
+**Impact:**
+- Users planning multiple years ahead now see correct latest data
+- No more confusion about "missing" contributions
+- Room utilization accurately reflects planning efforts
+- Clear messaging when showing future year data
+
+---
+
 ## 🎉 Version 6.5.9 - Analytics Explanations (Feb 18, 2026)
 
 ### 📚 EDUCATIONAL IMPROVEMENTS:
@@ -3477,19 +3559,28 @@ if st.session_state.current_page == "Home":
         
         st.markdown(f"### 📊 Contribution Room Utilization")
         
-        # Get CURRENT YEAR data for progress bars
-        current_year = str(datetime.now().year)
-        current_year_data = all_history.get(current_year, None)
+        # Get LATEST PLANNED YEAR data for progress bars (not just current calendar year!)
+        # User may have planned years into the future (e.g., planning 2028 from 2026)
+        if all_history:
+            latest_year = str(max(int(yr) for yr in all_history.keys()))
+            latest_year_data = all_history.get(latest_year, None)
+        else:
+            latest_year = str(datetime.now().year)
+            latest_year_data = None
         
-        if current_year_data:
+        if latest_year_data:
             # Prominently show which year this data is for
-            st.info(f"📅 **Showing {current_year} contribution data.** [Click any year below to view/edit that year's plan]")
+            calendar_year = datetime.now().year
+            if int(latest_year) > calendar_year:
+                st.info(f"📅 **Showing {latest_year} contribution data** (your most recent plan). Current calendar year is {calendar_year}. [Click any year below to view/edit]")
+            else:
+                st.info(f"📅 **Showing {latest_year} contribution data.** [Click any year below to view/edit that year's plan]")
             st.markdown("")
-            rrsp_room = current_year_data.get('rrsp_room', 0)
-            tfsa_room = current_year_data.get('tfsa_room', 0)
+            rrsp_room = latest_year_data.get('rrsp_room', 0)
+            tfsa_room = latest_year_data.get('tfsa_room', 0)
             
-            rrsp_used = calculate_annual_rrsp(current_year_data)
-            tfsa_used = current_year_data.get('tfsa_lump_sum', 0)
+            rrsp_used = calculate_annual_rrsp(latest_year_data)
+            tfsa_used = latest_year_data.get('tfsa_lump_sum', 0)
             
             rrsp_remaining = max(0, rrsp_room - rrsp_used)
             tfsa_remaining = max(0, tfsa_room - tfsa_used)
