@@ -63,13 +63,51 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.8.0 - Phase 1 Email Notifications"
+APP_VERSION = "6.9.0 - Multi-Admin Notification System"
 APP_DATE = "February 18, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🚀 Version 6.9.0 - Multi-Admin Notification System (Feb 18, 2026)
+
+### 🎯 COMPLETE NOTIFICATION OPTIMIZATION
+
+**Multi-Admin Support:**
+- Admin notifications sent to ALL admins (not just one)
+- Each admin controls their own notification preferences
+- Scalable for multiple administrators
+
+**Email Validation:**
+- Validates email format when saving
+- Warns about fake/test emails (@taxoptimizer.local, @example.com)
+- Prevents using invalid email addresses
+
+**Smart Email Routing:**
+- Personal notifications → user's configured notification_email
+- Admin notifications → ALL admins' notification_emails
+- Automatic fallback to login email if notification_email not set
+
+**Admin Email Setup:**
+- Warning on first login if using fake email
+- One-click navigation to notification settings
+- Clear guidance for setting real email address
+
+**Enhanced Test Email:**
+- Queries database for saved notification_email
+- Shows which email will receive test
+- Validates email before sending
+
+**send_admin_notification() Function:**
+- Centralized admin notification distribution
+- Queries all admins from database
+- Respects individual admin opt-in preferences
+- Skips fake/test email addresses
+- Returns count of emails sent
+
+---
+
 ## 🎉 Version 6.8.0 - Phase 1 Email Notifications (Feb 18, 2026)
 
 ### 📧 MAJOR FEATURE: EMAIL NOTIFICATION SYSTEM
@@ -2910,6 +2948,212 @@ def check_and_send_rrsp_deadline_notifications(user_email, username, year_data_d
     
     return notifications_sent
 
+# ============================================================================
+# v6.9.0: EMAIL VALIDATION & MULTI-ADMIN NOTIFICATION HELPERS
+# ============================================================================
+
+def validate_email_address(email):
+    """
+    Validate email address format and detect fake/test emails
+    
+    Args:
+        email: Email address to validate
+    
+    Returns:
+        tuple: (is_valid, warning_message)
+            - is_valid: True if email is valid format
+            - warning_message: Warning text if fake/test email detected, None otherwise
+    """
+    # Basic format validation
+    if not email or '@' not in email or '.' not in email.split('@')[1]:
+        return False, "Invalid email format. Please enter a valid email address."
+    
+    email_lower = email.lower()
+    
+    # Check for fake/test email domains
+    fake_domains = ['taxoptimizer.local', 'example.com', 'test.com', 'fake.com', 'localhost']
+    
+    for domain in fake_domains:
+        if domain in email_lower:
+            return True, f"⚠️ This looks like a test/fake email ({domain}). Please use your real email to receive notifications."
+    
+    return True, None
+
+def send_admin_notification(notification_type, subject, html_body, plain_body=None):
+    """
+    Send notification to ALL admins who have opted-in to receive admin notifications
+    
+    This function:
+    - Queries database for all users with role='admin'
+    - Gets their notification preferences
+    - Sends email to each admin who has opted-in to this notification type
+    - Skips fake/test email addresses
+    - Returns count of successful sends
+    
+    Args:
+        notification_type: One of 'new_user_created', 'user_milestone_reached', 'system_alerts'
+        subject: Email subject line
+        html_body: HTML email content
+        plain_body: Plain text email content (optional)
+    
+    Returns:
+        int: Number of emails successfully sent
+    """
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    
+    emails_sent = 0
+    
+    try:
+        # Build connection string
+        if 'url' in st.secrets.database:
+            conn_string = st.secrets.database.url
+        else:
+            host = st.secrets.database.get('host', '')
+            port = st.secrets.database.get('port', '5432')
+            dbname = st.secrets.database.get('name', '')
+            user = st.secrets.database.get('user', '')
+            password = st.secrets.database.get('password', '')
+            sslmode = st.secrets.database.get('sslmode', 'require')
+            conn_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
+        
+        conn = psycopg2.connect(conn_string)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Get all admins with their notification preferences
+        cursor.execute("""
+            SELECT 
+                u.user_id,
+                u.username,
+                u.email as login_email,
+                COALESCE(uep.notification_email, u.email) as notification_email,
+                uep.enabled as notifications_enabled,
+                uep.preferences
+            FROM users u
+            LEFT JOIN user_email_preferences uep ON u.user_id = uep.user_id
+            WHERE u.role = 'admin'
+        """)
+        
+        admins = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        for admin in admins:
+            # Check if notifications are enabled for this admin
+            if admin['notifications_enabled'] is False:
+                continue  # Admin has disabled all notifications
+            
+            # Check if admin has opted-in to this specific notification type
+            if admin['preferences']:
+                notifications = admin['preferences'].get('notifications', {})
+                if not notifications.get(notification_type, False):
+                    continue  # Admin has not opted-in to this notification type
+            else:
+                # No preferences set - assume opted-in by default for admin notifications
+                pass
+            
+            # Get email address (prefer notification_email, fall back to login_email)
+            email_to = admin['notification_email']
+            
+            # Validate email and skip fake addresses
+            is_valid, warning = validate_email_address(email_to)
+            if not is_valid or warning:
+                # Skip invalid or fake email addresses
+                print(f"Skipping admin {admin['username']}: Invalid or fake email {email_to}")
+                continue
+            
+            # Send email to this admin
+            try:
+                success, msg = send_email(email_to, subject, html_body, plain_body)
+                if success:
+                    emails_sent += 1
+                    print(f"✅ Admin notification sent to {admin['username']} at {email_to}")
+                else:
+                    print(f"❌ Failed to send to {admin['username']}: {msg}")
+            except Exception as e:
+                print(f"❌ Error sending to {admin['username']}: {e}")
+        
+        return emails_sent
+        
+    except Exception as e:
+        print(f"❌ Error in send_admin_notification: {e}")
+        return 0
+
+def send_new_user_created_notification(new_username, new_email, new_role, created_at):
+    """
+    Send notification to all admins when a new user is created
+    
+    Args:
+        new_username: Username of newly created user
+        new_email: Email of newly created user
+        new_role: Role assigned to new user ('user' or 'admin')
+        created_at: Timestamp of user creation
+    
+    Returns:
+        int: Number of emails sent
+    """
+    subject = f"🆕 New User Created: {new_username}"
+    
+    html_body = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
+            <h1 style="color: white; margin: 0;">👤 New User Registration</h1>
+        </div>
+        
+        <div style="padding: 30px;">
+            <p>Hello Administrator,</p>
+            
+            <p>A new user has been registered in <strong>Canadian Tax Optimizer</strong>:</p>
+            
+            <div style="background: #f8f9fa; border-left: 4px solid #667eea; padding: 20px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Username:</strong> {new_username}</p>
+                <p style="margin: 5px 0;"><strong>Email:</strong> {new_email}</p>
+                <p style="margin: 5px 0;"><strong>Role:</strong> {new_role.upper()}</p>
+                <p style="margin: 5px 0;"><strong>Created:</strong> {created_at}</p>
+            </div>
+            
+            <p>You can view and manage this user from the <strong>Admin Dashboard</strong>.</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{st.secrets.email.get('base_url', 'https://your-app.streamlit.app')}" 
+                   style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                          color: white; padding: 15px 30px; text-decoration: none; 
+                          border-radius: 8px; font-weight: 600; display: inline-block;">
+                    View Admin Dashboard
+                </a>
+            </div>
+            
+            <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+            
+            <p style="font-size: 0.9em; color: #666;">
+                This is an automated admin notification from Canadian Tax Optimizer. 
+                You can manage your notification preferences in the Notification Settings page.
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    plain_body = f"""
+    NEW USER REGISTRATION
+    
+    A new user has been registered in Canadian Tax Optimizer:
+    
+    Username: {new_username}
+    Email: {new_email}
+    Role: {new_role.upper()}
+    Created: {created_at}
+    
+    You can view and manage this user from the Admin Dashboard.
+    
+    ---
+    Canadian Tax Optimizer - Admin Notification
+    """
+    
+    return send_admin_notification('new_user_created', subject, html_body, plain_body)
+
+
 
 # ============================================================================
 # EMAIL PREFERENCE MANAGEMENT
@@ -4846,7 +5090,26 @@ def show_notification_settings_page():
         if not notification_email:
             notification_email = st.session_state.email  # Fall back to login email if empty
         
-        st.caption(f"💡 **Tip:** Notifications will be sent to: **{notification_email}**")
+        # v6.9.0: Validate email address
+        is_valid, validation_warning = validate_email_address(notification_email)
+        
+        if validation_warning:
+            # Show warning for fake/test emails
+            st.warning(validation_warning)
+        elif notification_email == st.session_state.email:
+            st.caption(f"💡 **Tip:** Notifications will be sent to: **{notification_email}** (your login email)")
+        else:
+            st.caption(f"💡 **Tip:** Notifications will be sent to: **{notification_email}** (custom notification email)")
+        
+        # Show comparison if different from login email
+        if notification_email != st.session_state.email:
+            st.info(f"""
+                📧 **Your Email Addresses:**  
+                🔑 **Login Email:** `{st.session_state.email}`  
+                📬 **Notification Email:** `{notification_email}`  
+                
+                All notifications will be sent to your notification email address.
+            """)
         
         frequency = st.selectbox(
             "Email frequency",
@@ -5016,46 +5279,56 @@ def show_notification_settings_page():
         
         # Save button
         if st.form_submit_button("💾 Save Notification Settings", use_container_width=True, type="primary"):
-            # Save to database using direct connection
-            try:
-                import psycopg2
+            # v6.9.0: Validate email before saving
+            is_valid, validation_warning = validate_email_address(notification_email)
+            
+            if not is_valid:
+                st.error("❌ Cannot save: Invalid email address format. Please enter a valid email.")
+            else:
+                # Show warning but allow save for fake emails
+                if validation_warning:
+                    st.warning(f"{validation_warning} Settings will be saved, but you won't receive emails at fake addresses.")
                 
-                # Build connection string
-                if 'url' in st.secrets.database:
-                    conn_string = st.secrets.database.url
-                else:
-                    host = st.secrets.database.get('host', '')
-                    port = st.secrets.database.get('port', '5432')
-                    dbname = st.secrets.database.get('name', '')
-                    user = st.secrets.database.get('user', '')
-                    password = st.secrets.database.get('password', '')
-                    sslmode = st.secrets.database.get('sslmode', 'require')
-                    conn_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
-                
-                conn = psycopg2.connect(conn_string)
-                conn.autocommit = True
-                cursor = conn.cursor()
-                
-                # Build notification preferences JSON
-                notification_prefs = {
-                    'notifications': {
-                        'rrsp_deadline': rrsp_deadline,
-                        'tfsa_overcontribution': tfsa_overcontribution,
-                        'penthouse_bracket': penthouse_bracket,
-                        'employer_match': employer_match,
-                        'tax_refund': tax_refund
+                # Save to database using direct connection
+                try:
+                    import psycopg2
+                    
+                    # Build connection string
+                    if 'url' in st.secrets.database:
+                        conn_string = st.secrets.database.url
+                    else:
+                        host = st.secrets.database.get('host', '')
+                        port = st.secrets.database.get('port', '5432')
+                        dbname = st.secrets.database.get('name', '')
+                        user = st.secrets.database.get('user', '')
+                        password = st.secrets.database.get('password', '')
+                        sslmode = st.secrets.database.get('sslmode', 'require')
+                        conn_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
+                    
+                    conn = psycopg2.connect(conn_string)
+                    conn.autocommit = True
+                    cursor = conn.cursor()
+                    
+                    # Build notification preferences JSON
+                    notification_prefs = {
+                        'notifications': {
+                            'rrsp_deadline': rrsp_deadline,
+                            'tfsa_overcontribution': tfsa_overcontribution,
+                            'penthouse_bracket': penthouse_bracket,
+                            'employer_match': employer_match,
+                            'tax_refund': tax_refund
+                        }
                     }
-                }
-                
-                # Add admin notifications if user is admin
-                if st.session_state.role == 'admin' and new_user_created is not None:
-                    notification_prefs['notifications'].update({
-                        'new_user_created': new_user_created,
-                        'user_milestone_reached': user_milestone_reached,
-                        'system_alerts': system_alerts
-                    })
-                
-                cursor.execute("""
+                    
+                    # Add admin notifications if user is admin
+                    if st.session_state.role == 'admin' and new_user_created is not None:
+                        notification_prefs['notifications'].update({
+                            'new_user_created': new_user_created,
+                            'user_milestone_reached': user_milestone_reached,
+                            'system_alerts': system_alerts
+                        })
+                    
+                    cursor.execute("""
                     INSERT INTO user_email_preferences (user_id, notification_email, enabled, frequency, preferences, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (user_id) 
@@ -5072,20 +5345,20 @@ def show_notification_settings_page():
                     frequency,
                     json.dumps(notification_prefs),
                     datetime.now()
-                ))
-                
-                cursor.close()
-                conn.close()
-                
-                st.success("✅ Notification settings saved successfully!")
-                st.balloons()
-            except Exception as e:
-                if conn:
-                    try:
-                        conn.close()
-                    except:
-                        pass
-                st.error(f"❌ Failed to save settings: {str(e)}")
+                    ))
+                    
+                    cursor.close()
+                    conn.close()
+                    
+                    st.success("✅ Notification settings saved successfully!")
+                    st.balloons()
+                except Exception as e:
+                    if 'conn' in locals():
+                        try:
+                            conn.close()
+                        except:
+                            pass
+                    st.error(f"❌ Failed to save settings: {str(e)}")
     
     # Test email section
     st.divider()
@@ -5168,6 +5441,29 @@ if not st.session_state.logged_in:
 # If logged in, show main app
 # Load user's data
 all_history = load_all_data(st.session_state.user_id)
+
+# v6.9.0: Admin Email Setup Warning - Show if admin is using fake/test email
+if st.session_state.role == 'admin':
+    is_valid, warning = validate_email_address(st.session_state.email)
+    if warning:
+        st.warning(f"""
+            ⚠️ **Admin Action Required: Set Real Email Address**
+            
+            Your admin account is using a test/placeholder email: `{st.session_state.email}`
+            
+            **Why this matters:**
+            - You won't receive admin notifications (new users, milestones, alerts)
+            - Email alerts will fail silently
+            - Other admins may not receive shared notifications
+            
+            **How to fix:**
+            1. Click "📧 Notification Settings" in the sidebar
+            2. Change your notification email to a real address (e.g., your Gmail)
+            3. Click "💾 Save Notification Settings"
+            4. Test with "📧 Send Test Email"
+            
+            This warning will disappear once you set a valid email address.
+        """)
 
 # Sidebar navigation - always visible on all pages
 with st.sidebar:
