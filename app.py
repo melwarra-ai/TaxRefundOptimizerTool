@@ -63,13 +63,82 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.5.7 - Edge Case Fix"
-APP_DATE = "February 17, 2026"
+APP_VERSION = "6.5.8 - Visual Polish"
+APP_DATE = "February 18, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.5.8 - Visual Polish (Feb 18, 2026)
+
+### 🎨 UI/UX FIX:
+
+**Problem:** Year tiles showing MISLEADING colors on home page.
+
+**User Report:**
+- Status logic now correct: 2025/2026/2027 showing "🟢 Optimized" ✅
+- BUT tiles had RED backgrounds ❌
+- Red background + green status = confusing!
+
+**Visual Issue:**
+```
+┌─────────────────────────────┐
+│ 📅 2025 $28,560             │  ← RED background
+│ 🟢 Optimized               │  ← Green status
+└─────────────────────────────┘
+
+Red + Green = Confusing! ❌
+```
+
+**Root Cause:**
+```python
+# Line 4117 - button type setting:
+type="primary" if is_saved else "secondary"
+
+# Problem:
+# - ALL saved years got type="primary"
+# - Streamlit's "primary" buttons = RED background
+# - This overrode the container's green/yellow/orange styling
+```
+
+**Fix Applied:**
+```python
+# OLD (Wrong):
+type="primary" if is_saved else "secondary"
+# Result: Saved years = RED, unsaved = gray
+
+# NEW (Correct):
+type="secondary"  # Always secondary
+# Result: Container style (green/yellow/orange/gray) shows through
+```
+
+**After Fix:**
+```
+✅ Optimized years: GREEN background + 🟢 green status
+✅ Partial years: YELLOW background + 🟡 yellow status
+✅ In Progress years: ORANGE background + 🟠 orange status
+✅ Empty years: GRAY background + ⚪ gray status
+
+Colors now match status!
+```
+
+**Visual Comparison:**
+
+**Before v6.5.8 (Misleading):**
+- 2025: 🔴 Red bg + 🟢 Optimized ← Confusing!
+- 2026: 🔴 Red bg + 🟢 Optimized ← Confusing!
+- 2027: 🔴 Red bg + 🟢 Optimized ← Confusing!
+- 2028: 🔴 Red bg + 🟡 Partial ← Confusing!
+
+**After v6.5.8 (Clear):**
+- 2025: 🟢 Green bg + 🟢 Optimized ✅
+- 2026: 🟢 Green bg + 🟢 Optimized ✅
+- 2027: 🟢 Green bg + 🟢 Optimized ✅
+- 2028: 🟡 Yellow bg + 🟡 Partial ✅
+
+---
+
 ## 🎉 Version 6.5.7 - Edge Case Fix (Feb 17, 2026)
 
 ### 🐛 CRITICAL EDGE CASE BUG FIX:
@@ -4109,12 +4178,13 @@ if st.session_state.current_page == "Home":
                 # Wrap button in styled container
                 st.markdown(f'<div style="{container_style}">', unsafe_allow_html=True)
                 
-                # Create the button
+                # Create the button - ALWAYS use secondary type to avoid Streamlit's red primary styling
+                # Container provides the correct color (green/yellow/orange/gray)
                 if st.button(
                     button_label,
                     key=f"home_{yr}",
                     use_container_width=True,
-                    type="primary" if is_saved else "secondary"
+                    type="secondary"  # CRITICAL: Must be secondary, not primary (primary = red)
                 ):
                     st.session_state.selected_year = yr
                     st.session_state.current_page = "Year View"
