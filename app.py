@@ -4717,27 +4717,110 @@ def show_notification_settings_page():
         </div>
     """, unsafe_allow_html=True)
     
-    # Get current preferences from database
-    result = execute_query("""
-        SELECT * FROM user_email_preferences WHERE user_id = %s
-    """, (st.session_state.user_id,))
+    # Create tables dynamically on page load - NO MIGRATIONS
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
     
-    if result:
-        prefs = dict(result[0])
-        current_enabled = prefs.get('enabled', True)
-        current_frequency = prefs.get('frequency', 'real_time')
-        current_notifications = prefs.get('preferences', {}).get('notifications', {})
-    else:
-        # Defaults
-        current_enabled = True
-        current_frequency = 'real_time'
-        current_notifications = {
-            'rrsp_deadline': True,
-            'tfsa_overcontribution': True,
-            'penthouse_bracket': True,
-            'employer_match': True,
-            'tax_refund': True
-        }
+    conn = None
+    tables_created = False
+    
+    try:
+        # Connect directly to database
+        if hasattr(st, 'secrets') and 'database' in st.secrets:
+            conn = psycopg2.connect(st.secrets.database.url)
+            conn.autocommit = True
+            cursor = conn.cursor()
+            
+            # Create user_email_preferences table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_email_preferences (
+                    user_id INTEGER PRIMARY KEY,
+                    enabled BOOLEAN DEFAULT TRUE,
+                    frequency VARCHAR(20) DEFAULT 'real_time',
+                    preferences JSONB DEFAULT '{"notifications": {}}'::jsonb,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create notification_log table  
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS notification_log (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    notification_type VARCHAR(50) NOT NULL,
+                    year INTEGER,
+                    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status VARCHAR(20) DEFAULT 'sent',
+                    metadata JSONB
+                )
+            """)
+            
+            # Create indexes
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_email_preferences_user_id 
+                ON user_email_preferences(user_id)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notification_log_user_type 
+                ON notification_log(user_id, notification_type, sent_at)
+            """)
+            
+            cursor.close()
+            conn.close()
+            tables_created = True
+            
+    except Exception as e:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+        st.error(f"⚠️ Could not create database tables: {str(e)}")
+        st.info("💡 Contact your administrator to ensure database tables are created.")
+        return
+    
+    # Set defaults
+    current_enabled = True
+    current_frequency = 'real_time'
+    current_notifications = {
+        'rrsp_deadline': True,
+        'tfsa_overcontribution': True,
+        'penthouse_bracket': True,
+        'employer_match': True,
+        'tax_refund': True
+    }
+    
+    # Try to load existing preferences (only if tables were created successfully)
+    if tables_created:
+        try:
+            conn = psycopg2.connect(st.secrets.database.url)
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cursor.execute("""
+                SELECT enabled, frequency, preferences 
+                FROM user_email_preferences 
+                WHERE user_id = %s
+            """, (st.session_state.user_id,))
+            
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if result:
+                current_enabled = result['enabled']
+                current_frequency = result['frequency']
+                if result['preferences'] and 'notifications' in result['preferences']:
+                    current_notifications = result['preferences']['notifications']
+                    
+        except Exception as e:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+            # Use defaults if loading fails
+            pass
     
     # Master Settings
     st.markdown("### ⚙️ Master Settings")
@@ -4867,9 +4950,14 @@ def show_notification_settings_page():
         
         # Save button
         if st.form_submit_button("💾 Save Notification Settings", use_container_width=True, type="primary"):
-            # Save to database
+            # Save to database using direct connection
             try:
-                execute_query("""
+                import psycopg2
+                conn = psycopg2.connect(st.secrets.database.url)
+                conn.autocommit = True
+                cursor = conn.cursor()
+                
+                cursor.execute("""
                     INSERT INTO user_email_preferences (user_id, enabled, frequency, preferences, updated_at)
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (user_id) 
@@ -4892,12 +4980,20 @@ def show_notification_settings_page():
                         }
                     }),
                     datetime.now()
-                ), fetch=False)
+                ))
+                
+                cursor.close()
+                conn.close()
                 
                 st.success("✅ Notification settings saved successfully!")
                 st.balloons()
             except Exception as e:
-                st.error(f"❌ Failed to save settings: {e}")
+                if conn:
+                    try:
+                        conn.close()
+                    except:
+                        pass
+                st.error(f"❌ Failed to save settings: {str(e)}")
     
     # Test email section
     st.divider()
