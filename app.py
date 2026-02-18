@@ -63,13 +63,68 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.5.5 - Room Exhaustion Logic"
+APP_VERSION = "6.5.6 - Optimization Status Fix"
 APP_DATE = "February 17, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎉 Version 6.5.6 - Optimization Status Fix (Feb 17, 2026)
+
+### 🐛 CRITICAL BUG FIX:
+
+**Problem:** Year tiles showing wrong status on home page even when fully optimized.
+
+**User Report:**
+- Year View page: "🟢 OPTIMIZED - This year will show GREEN"
+- Home page tile: "🟠 In Progress" ← WRONG!
+- All years 2025-2027 affected
+
+**Root Cause:**
+```python
+# In is_year_optimized() function:
+planning_complete = (total_gross > 0) and (rrsp_room > 0) and (tfsa_room > 0)
+                                                               ^^^^^^^^^^^^^^^^
+                                                               BUG: Required TFSA room!
+```
+
+**Why This Was Wrong:**
+- Function required TFSA room > 0 to consider year "optimized"
+- But TFSA is optional for tax optimization!
+- Tax optimization = reducing taxable income below $181,440 (RRSP goal)
+- TFSA is a separate tax-free growth vehicle
+- A year can be optimized (green) with zero TFSA contributions
+
+**User Scenario:**
+```
+2025: Income $210K, RRSP $28,560, Taxable $181,440
+Status: Below Penthouse threshold = OPTIMIZED ✅
+TFSA Room: Not entered (0)
+Result: is_year_optimized() returned False ❌
+Home Page Tile: Orange "In Progress" ❌ (Should be Green!)
+```
+
+**Fix Applied:**
+```python
+# OLD (Wrong):
+planning_complete = (total_gross > 0) and (rrsp_room > 0) and (tfsa_room > 0)
+
+# NEW (Correct):
+planning_complete = (total_gross > 0) and (rrsp_room > 0)
+# TFSA not required for optimization check
+```
+
+**After Fix:**
+- Years 2025-2027 now correctly show 🟢 GREEN "Optimized" on home page
+- Year View and Home Page status are now consistent
+- TFSA room is optional (only used for TFSA-specific insights)
+
+**Documentation Added:**
+Added note to is_year_optimized() function clarifying that TFSA room is not required for optimization status, only RRSP room matters for tax optimization.
+
+---
+
 ## 🎉 Version 6.5.5 - Room Exhaustion Logic (Feb 17, 2026)
 
 ### 🐛 CRITICAL BUG FIXES:
@@ -1418,11 +1473,16 @@ def is_year_optimized(year_data):
     """
     Returns True ONLY if:
     1. Year has actual income data entered (t4_gross > 0 or other_income > 0)
-    2. Contribution rooms are set (rrsp_room > 0 and tfsa_room > 0)
+    2. RRSP room is set (rrsp_room > 0) - TFSA not required for tax optimization check
     3. Taxable income is below the Penthouse threshold ($181,440)
     
     A year with all zeros is 'Empty', not 'Optimized'.
     This matches the same logic used in the Year View status card.
+    
+    NOTE: TFSA room is NOT required for optimization status because:
+    - Tax optimization is about reducing taxable income (RRSP goal)
+    - TFSA is a separate tax-free growth vehicle
+    - A year can be "optimized" (green) even with zero TFSA contributions
     """
     if not year_data:
         return False
@@ -1431,10 +1491,9 @@ def is_year_optimized(year_data):
     other_inc = year_data.get('other_income', 0)
     total_gross = t4_gross + other_inc
     rrsp_room = year_data.get('rrsp_room', 0)
-    tfsa_room = year_data.get('tfsa_room', 0)
     
-    # Must have income AND contribution rooms set — otherwise it's just "Empty"
-    planning_complete = (total_gross > 0) and (rrsp_room > 0) and (tfsa_room > 0)
+    # Must have income AND RRSP room set — TFSA not required for optimization check
+    planning_complete = (total_gross > 0) and (rrsp_room > 0)
     if not planning_complete:
         return False
     
