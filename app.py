@@ -3588,23 +3588,6 @@ def show_auth_page():
 def show_admin_dashboard():
     """Display professional institutional-grade admin dashboard"""
     
-    with st.sidebar:
-        if st.button("⬅️ Back to App", use_container_width=True, key="admin_back_btn"):
-            st.session_state.current_page = "Home"
-            st.rerun()
-        
-        st.divider()
-        
-        if st.button("🚪 Logout", use_container_width=True, type="secondary", key="admin_logout_btn"):
-            logout_user(st.session_state.session_token)
-            st.session_state.logged_in = False
-            st.session_state.user_id = None
-            st.session_state.username = None
-            st.session_state.email = None
-            st.session_state.role = None
-            st.session_state.session_token = None
-            st.rerun()
-    
     # PROFESSIONAL HEADER BANNER (Purple Gradient - Matching Reference Image 2)
     st.markdown("""
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
@@ -4622,21 +4605,6 @@ def show_admin_dashboard():
 def show_profile_page():
     """Display user profile"""
     
-    with st.sidebar:
-        if st.button("🏠 Back to Home", use_container_width=True, key="profile_back_btn"):
-            st.session_state.current_page = "Home"
-            st.rerun()
-        
-        if st.button("🚪 Logout", use_container_width=True, type="secondary", key="profile_logout_btn"):
-            logout_user(st.session_state.session_token)
-            st.session_state.logged_in = False
-            st.session_state.user_id = None
-            st.session_state.username = None
-            st.session_state.email = None
-            st.session_state.role = None
-            st.session_state.session_token = None
-            st.rerun()
-    
     st.title(f"👤 User Profile: {st.session_state.username}")
     
     # Account Info
@@ -4689,21 +4657,6 @@ def show_profile_page():
 
 def show_notification_settings_page():
     """Display email notification settings"""
-    
-    with st.sidebar:
-        if st.button("🏠 Back to Home", use_container_width=True, key="notif_back_btn"):
-            st.session_state.current_page = "Home"
-            st.rerun()
-        
-        if st.button("🚪 Logout", use_container_width=True, type="secondary", key="notif_logout_btn"):
-            logout_user(st.session_state.session_token)
-            st.session_state.logged_in = False
-            st.session_state.user_id = None
-            st.session_state.username = None
-            st.session_state.email = None
-            st.session_state.role = None
-            st.session_state.session_token = None
-            st.rerun()
     
     st.title("📧 Email Notification Settings")
     
@@ -5216,75 +5169,103 @@ if not st.session_state.logged_in:
 # Load user's data
 all_history = load_all_data(st.session_state.user_id)
 
-# Sidebar navigation - only show on Home page to avoid duplicates
-if st.session_state.current_page == "Home":
-    with st.sidebar:
-        # Admin badge (if admin)
-        if st.session_state.role == 'admin':
-            st.markdown("""
-                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
-                     padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
-                     display: inline-block; width: auto;">
-                    <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
-                </div>
-            """, unsafe_allow_html=True)
-        
-        # Username
-        st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
-                    unsafe_allow_html=True)
-        
-        st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
-        
-        # App branding
-        st.markdown(f"""
-            <div style="margin-bottom: 20px;">
-                <div style="font-size: 1.1em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
-                    📊 {APP_NAME}
-                </div>
-                <div style="font-size: 0.85em; color: #64748b;">
-                    {APP_SUBTITLE} v{APP_VERSION.split(' - ')[0]}
-                </div>
+# Sidebar navigation - always visible on all pages
+with st.sidebar:
+    # Admin badge (if admin)
+    if st.session_state.role == 'admin':
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                 padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
+                 display: inline-block; width: auto;">
+                <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
             </div>
         """, unsafe_allow_html=True)
+    
+    # Username
+    st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
+                unsafe_allow_html=True)
+    
+    st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
+    
+    # App branding
+    st.markdown(f"""
+        <div style="margin-bottom: 20px;">
+            <div style="font-size: 1.1em; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                📊 {APP_NAME}
+            </div>
+            <div style="font-size: 0.85em; color: #64748b;">
+                {APP_SUBTITLE} v{APP_VERSION.split(' - ')[0]}
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Version Info - Collapsible expander
+    with st.expander("ℹ️ Version Info", expanded=False):
+        st.markdown(f"""
+            **Version:** {APP_VERSION.split(' - ')[0]}  
+            **Released:** {APP_DATE}  
+            **Build:** {APP_VERSION.split(' - ')[1] if ' - ' in APP_VERSION else 'Production'}
+        """)
         
-        # Version Info - Collapsible expander
-        with st.expander("ℹ️ Version Info", expanded=False):
-            st.markdown(f"""
-                **Version:** {APP_VERSION.split(' - ')[0]}  
-                **Released:** {APP_DATE}  
-                **Build:** {APP_VERSION.split(' - ')[1] if ' - ' in APP_VERSION else 'Production'}
-            """)
-            
-            if st.button("📋 View Changelog", use_container_width=True, key="sidebar_changelog"):
-                st.session_state.current_page = "Version"
-                st.rerun()
-        
-        st.divider()
-        
-        # Admin dashboard button (only for admins) - FIX 3: Remove type="primary" for neutral color
-        if st.session_state.role == 'admin':
+        if st.button("📋 View Changelog", use_container_width=True, key="sidebar_changelog"):
+            st.session_state.current_page = "Version"
+            st.rerun()
+    
+    st.divider()
+    
+    # Navigation buttons with RED highlighting for selected page
+    current_page = st.session_state.current_page
+    
+    # Admin dashboard button (only for admins) - RED when selected
+    if st.session_state.role == 'admin':
+        if current_page == "Admin":
+            st.markdown("""
+                <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); 
+                     padding: 12px; border-radius: 8px; margin-bottom: 8px; text-align: center;">
+                    <span style="color: white; font-weight: 600;">👥 Admin Dashboard</span>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
             if st.button("👥 Admin Dashboard", use_container_width=True, key="main_admin_btn"):
                 st.session_state.current_page = "Admin"
                 st.rerun()
-        
+    
+    # Profile Settings - RED when selected
+    if current_page == "Profile":
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); 
+                 padding: 12px; border-radius: 8px; margin-bottom: 8px; text-align: center;">
+                <span style="color: white; font-weight: 600;">👤 Profile Settings</span>
+            </div>
+        """, unsafe_allow_html=True)
+    else:
         if st.button("👤 Profile Settings", use_container_width=True, key="main_profile_btn"):
             st.session_state.current_page = "Profile"
             st.rerun()
-        
+    
+    # Notification Settings - RED when selected
+    if current_page == "Notifications":
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); 
+                 padding: 12px; border-radius: 8px; margin-bottom: 8px; text-align: center;">
+                <span style="color: white; font-weight: 600;">📧 Notification Settings</span>
+            </div>
+        """, unsafe_allow_html=True)
+    else:
         if st.button("📧 Notification Settings", use_container_width=True, key="main_notifications_btn"):
             st.session_state.current_page = "Notifications"
             st.rerun()
-        
-        # FIX 2: Only one Logout button
-        if st.button("🚪 Logout", use_container_width=True, type="secondary", key="main_logout_btn"):
-            logout_user(st.session_state.session_token)
-            st.session_state.logged_in = False
-            st.session_state.user_id = None
-            st.session_state.username = None
-            st.session_state.email = None
-            st.session_state.role = None
-            st.session_state.session_token = None
-            st.rerun()
+    
+    # Logout button - always at bottom
+    if st.button("🚪 Logout", use_container_width=True, type="secondary", key="main_logout_btn"):
+        logout_user(st.session_state.session_token)
+        st.session_state.logged_in = False
+        st.session_state.user_id = None
+        st.session_state.username = None
+        st.session_state.email = None
+        st.session_state.role = None
+        st.session_state.session_token = None
+        st.rerun()
 
 # Show admin dashboard if selected (admin only)
 if st.session_state.current_page == "Admin":
@@ -5309,21 +5290,6 @@ if st.session_state.current_page == "Notifications":
 # Show version info page if selected
 if st.session_state.current_page == "Version":
     # Version Info Page
-    with st.sidebar:
-        if st.button("🏠 Back to Home", use_container_width=True, key="version_back_btn"):
-            st.session_state.current_page = "Home"
-            st.rerun()
-        
-        if st.button("🚪 Logout", use_container_width=True, type="secondary", key="version_logout_btn"):
-            logout_user(st.session_state.session_token)
-            st.session_state.logged_in = False
-            st.session_state.user_id = None
-            st.session_state.username = None
-            st.session_state.email = None
-            st.session_state.role = None
-            st.session_state.session_token = None
-            st.rerun()
-    
     st.title(f"ℹ️ {APP_NAME} - Version Info")
     
     # Current Version Banner
