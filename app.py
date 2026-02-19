@@ -5709,21 +5709,6 @@ if st.session_state.get('is_impersonating', False) and st.session_state.get('ori
             </div>
         </div>
     """.format(username=st.session_state.username), unsafe_allow_html=True)
-    
-    # Return to Admin Dashboard button
-    col_return1, col_return2, col_return3 = st.columns([1, 2, 1])
-    with col_return2:
-        if st.button("🔙 Return to Admin Dashboard", use_container_width=True, type="primary"):
-            # Restore original admin session
-            st.session_state.user_id = st.session_state.original_user_id
-            st.session_state.username = st.session_state.original_username
-            st.session_state.email = st.session_state.original_email
-            st.session_state.role = st.session_state.original_role
-            st.session_state.is_impersonating = False
-            st.session_state.current_page = "Admin"
-            st.rerun()
-    
-    st.markdown("<hr style='margin: 30px 0; border: none; border-top: 2px solid #e2e8f0;'>", unsafe_allow_html=True)
 
 # v6.9.0: Admin Email Setup Warning - Show if admin is using fake/test email
 if st.session_state.role == 'admin' and not st.session_state.get('is_impersonating', False):
@@ -5830,6 +5815,20 @@ with st.sidebar:
             st.rerun()
     
     st.divider()
+    
+    # v6.10.0: Return to Admin Dashboard button (only when impersonating)
+    if st.session_state.get('is_impersonating', False) and st.session_state.get('original_role') == 'admin':
+        if st.button("🔙 Return to Admin Dashboard", use_container_width=True, type="primary", key="sidebar_return_admin"):
+            # Restore original admin session
+            st.session_state.user_id = st.session_state.original_user_id
+            st.session_state.username = st.session_state.original_username
+            st.session_state.email = st.session_state.original_email
+            st.session_state.role = st.session_state.original_role
+            st.session_state.is_impersonating = False
+            st.session_state.current_page = "Admin"
+            st.rerun()
+        
+        st.divider()
     
     # Navigation buttons with RED highlighting for selected page
     current_page = st.session_state.current_page
