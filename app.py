@@ -63,14 +63,41 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.10.0 - User Impersonation & Home Tab"
+APP_VERSION = "6.10.0 - User Impersonation, Home Tab & RRSP Deadline Banner"
 APP_DATE = "February 18, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
-## 🎭 Version 6.10.0 - User Impersonation & Home Tab (Feb 18, 2026)
+## 🎭 Version 6.10.0 - User Impersonation, Home Tab & RRSP Deadline Banner (Feb 18, 2026)
+
+### 📅 SMART RRSP DEADLINE BANNER
+
+**Intelligent Deadline Reminders:**
+- Automatic banner appears 90 days before RRSP deadline
+- Different urgency levels based on days remaining
+- Dismissible for each tax year
+- Calculates March 1st deadline with weekend adjustment
+
+**Urgency Levels:**
+- 🚨 **CRITICAL** (0-14 days): Red banner, immediate action needed
+- ⚠️ **ACTION NEEDED** (15-30 days): Orange banner, act soon
+- 📅 **UPCOMING** (31-60 days): Yellow banner, start planning
+- ℹ️ **REMINDER** (61-90 days): Blue banner, advance notice
+
+**Banner Features:**
+- Shows exact deadline date (e.g., "March 2, 2026")
+- Displays days remaining
+- One-click dismiss button
+- Link to plan contributions for that year
+- Styled like professional banking apps
+
+**Smart Display:**
+- Only shows when deadline is within 90 days
+- Automatically hides after deadline passes
+- Dismissible per tax year (won't show again for that year)
+- Responsive urgency styling
 
 ### 🔐 ADMIN IMPERSONATION FEATURE
 
@@ -5687,29 +5714,6 @@ if not st.session_state.logged_in:
 # Load user's data
 all_history = load_all_data(st.session_state.user_id)
 
-# v6.10.0: Impersonation Mode Banner (Admin Only)
-if st.session_state.get('is_impersonating', False) and st.session_state.get('original_role') == 'admin':
-    st.markdown("""
-        <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
-             padding: 20px; border-radius: 12px; margin-bottom: 20px; 
-             box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-                <div>
-                    <div style="color: white; font-weight: 600; font-size: 1.1em; margin-bottom: 8px;">
-                        🔐 Admin viewing as:
-                    </div>
-                    <div style="color: white; font-size: 1.4em; font-weight: 700;">
-                        👤 {username}
-                    </div>
-                </div>
-                <div style="background: #fef3c7; color: #78350f; padding: 8px 20px; 
-                     border-radius: 20px; font-weight: 700; font-size: 1em;">
-                    ⚠️ IMPERSONATION MODE
-                </div>
-            </div>
-        </div>
-    """.format(username=st.session_state.username), unsafe_allow_html=True)
-
 # v6.9.0: Admin Email Setup Warning - Show if admin is using fake/test email
 if st.session_state.role == 'admin' and not st.session_state.get('is_impersonating', False):
     # Query database to get saved notification_email
@@ -5772,21 +5776,155 @@ if st.session_state.role == 'admin' and not st.session_state.get('is_impersonati
             This warning will disappear once you set a valid email address.
         """)
 
-# Sidebar navigation - always visible on all pages
-with st.sidebar:
-    # Admin badge (if admin)
-    if st.session_state.role == 'admin':
-        st.markdown("""
-            <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
-                 padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
-                 display: inline-block; width: auto;">
-                <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
+# v6.10.0: RRSP Deadline Banner - Show when deadline is approaching
+# Calculate days until next RRSP deadline
+from datetime import datetime, timedelta
+
+current_date = datetime.now()
+current_year = current_date.year
+
+# RRSP deadline is March 1st of the year AFTER the tax year
+# So for tax year 2025, deadline is March 1, 2026
+# We're currently in 2026, so we check for:
+# - 2025 deadline (March 1, 2026) - if not past yet
+# - 2026 deadline (March 1, 2027) - if 2025 deadline is past
+
+# Check 2025 deadline (March 1, 2026)
+deadline_year_2025 = 2026
+deadline_date_2025 = datetime(deadline_year_2025, 3, 1)
+# Adjust for weekends
+if deadline_date_2025.weekday() == 5:  # Saturday
+    deadline_date_2025 += timedelta(days=2)
+elif deadline_date_2025.weekday() == 6:  # Sunday
+    deadline_date_2025 += timedelta(days=1)
+
+days_until_2025 = (deadline_date_2025 - current_date).days
+
+# Determine which deadline to show banner for
+show_banner = False
+banner_tax_year = None
+banner_deadline = None
+banner_days = None
+
+# If 2025 deadline hasn't passed yet AND is within 90 days, show it
+if days_until_2025 > 0 and days_until_2025 <= 90:
+    show_banner = True
+    banner_tax_year = 2025
+    banner_deadline = deadline_date_2025
+    banner_days = days_until_2025
+
+# Check if banner has been dismissed for this year
+if f"rrsp_banner_dismissed_{banner_tax_year}" not in st.session_state:
+    st.session_state[f"rrsp_banner_dismissed_{banner_tax_year}"] = False
+
+if show_banner and not st.session_state.get(f"rrsp_banner_dismissed_{banner_tax_year}", False):
+    # Determine urgency level and styling
+    if banner_days <= 14:
+        # CRITICAL - 14 days or less
+        banner_color = "#dc2626"  # Red
+        banner_bg = "linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)"
+        banner_border = "#dc2626"
+        urgency_emoji = "🚨"
+        urgency_text = "URGENT"
+    elif banner_days <= 30:
+        # HIGH - 15-30 days
+        banner_color = "#ea580c"  # Orange
+        banner_bg = "linear-gradient(135deg, #fed7aa 0%, #fdba74 100%)"
+        banner_border = "#ea580c"
+        urgency_emoji = "⚠️"
+        urgency_text = "ACTION NEEDED"
+    elif banner_days <= 60:
+        # MEDIUM - 31-60 days
+        banner_color = "#f59e0b"  # Amber
+        banner_bg = "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)"
+        banner_border = "#f59e0b"
+        urgency_emoji = "📅"
+        urgency_text = "UPCOMING"
+    else:
+        # LOW - 61-90 days
+        banner_color = "#3b82f6"  # Blue
+        banner_bg = "linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)"
+        banner_border = "#3b82f6"
+        urgency_emoji = "ℹ️"
+        urgency_text = "REMINDER"
+    
+    deadline_formatted = banner_deadline.strftime("%B %d, %Y")
+    
+    # Create dismissible banner
+    col_banner, col_dismiss = st.columns([10, 1])
+    
+    with col_banner:
+        st.markdown(f"""
+            <div style="background: {banner_bg}; 
+                 padding: 20px; border-radius: 12px; margin-bottom: 20px;
+                 border-left: 4px solid {banner_border};
+                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="display: flex; align-items: flex-start; gap: 16px;">
+                    <div style="font-size: 2em; line-height: 1;">
+                        {urgency_emoji}
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                            <h3 style="margin: 0; color: {banner_color}; font-size: 1.2em;">
+                                The RRSP contribution deadline is approaching
+                            </h3>
+                            <span style="background: {banner_color}; color: white; 
+                                 padding: 4px 12px; border-radius: 12px; 
+                                 font-size: 0.75em; font-weight: 700;">
+                                {urgency_text}
+                            </span>
+                        </div>
+                        <p style="margin: 0; color: #1f2937; line-height: 1.6;">
+                            Lower your {banner_tax_year} taxable income by contributing to an RRSP by 
+                            <strong>{deadline_formatted}</strong> (only {banner_days} days remaining). 
+                            You could grow your investments within it and defer paying taxes until it's time to withdraw.
+                        </p>
+                        <div style="margin-top: 12px;">
+                            <a href="#" style="color: {banner_color}; text-decoration: none; 
+                               font-weight: 600; font-size: 0.95em;">
+                                → Plan your {banner_tax_year} contributions
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
         """, unsafe_allow_html=True)
     
-    # Username
-    st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
-                unsafe_allow_html=True)
+    with col_dismiss:
+        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+        if st.button("✕", key=f"dismiss_rrsp_banner_{banner_tax_year}", help="Dismiss this banner"):
+            st.session_state[f"rrsp_banner_dismissed_{banner_tax_year}"] = True
+            st.rerun()
+
+# Sidebar navigation - always visible on all pages
+with st.sidebar:
+    # v6.10.0: Show impersonation status at top if impersonating
+    if st.session_state.get('is_impersonating', False) and st.session_state.get('original_role') == 'admin':
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                 padding: 12px 16px; border-radius: 12px; text-align: center; margin-bottom: 12px;">
+                <div style="color: white; font-weight: 600; font-size: 0.85em; margin-bottom: 4px;">
+                    🔐 Admin viewing as:
+                </div>
+                <div style="color: white; font-weight: 700; font-size: 1.1em;">
+                    👤 {username}
+                </div>
+            </div>
+        """.format(username=st.session_state.username), unsafe_allow_html=True)
+    else:
+        # Regular admin badge (if admin and not impersonating)
+        if st.session_state.role == 'admin':
+            st.markdown("""
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                     padding: 10px 16px; border-radius: 20px; text-align: center; margin-bottom: 8px;
+                     display: inline-block; width: auto;">
+                    <span style="color: white; font-weight: 600; font-size: 0.9em;">⚡ Admin: Administrator</span>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Username (only show if not impersonating)
+        st.markdown(f"<p style='color: #64748b; font-size: 0.95em; margin-bottom: 20px;'>@{st.session_state.username}</p>", 
+                    unsafe_allow_html=True)
     
     st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
     
@@ -5833,10 +5971,10 @@ with st.sidebar:
     # Navigation buttons with RED highlighting for selected page
     current_page = st.session_state.current_page
     
-    # v6.10.0: Home button - RED when selected (for all users)
+    # v6.10.0: Home button - BLUE when selected (for all users)
     if current_page == "Home":
         st.markdown("""
-            <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); 
+            <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
                  padding: 12px; border-radius: 8px; margin-bottom: 8px; text-align: center;">
                 <span style="color: white; font-weight: 600;">🏠 Home</span>
             </div>
@@ -5846,11 +5984,11 @@ with st.sidebar:
             st.session_state.current_page = "Home"
             st.rerun()
     
-    # Admin dashboard button (only for admins and not impersonating) - RED when selected
+    # Admin dashboard button (only for admins and not impersonating) - BLUE when selected
     if st.session_state.role == 'admin' and not st.session_state.get('is_impersonating', False):
         if current_page == "Admin":
             st.markdown("""
-                <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); 
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
                      padding: 12px; border-radius: 8px; margin-bottom: 8px; text-align: center;">
                     <span style="color: white; font-weight: 600;">👥 Admin Dashboard</span>
                 </div>
@@ -5860,10 +5998,10 @@ with st.sidebar:
                 st.session_state.current_page = "Admin"
                 st.rerun()
     
-    # Profile Settings - RED when selected
+    # Profile Settings - BLUE when selected
     if current_page == "Profile":
         st.markdown("""
-            <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); 
+            <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
                  padding: 12px; border-radius: 8px; margin-bottom: 8px; text-align: center;">
                 <span style="color: white; font-weight: 600;">👤 Profile Settings</span>
             </div>
@@ -5873,10 +6011,10 @@ with st.sidebar:
             st.session_state.current_page = "Profile"
             st.rerun()
     
-    # Notification Settings - RED when selected
+    # Notification Settings - BLUE when selected
     if current_page == "Notifications":
         st.markdown("""
-            <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); 
+            <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
                  padding: 12px; border-radius: 8px; margin-bottom: 8px; text-align: center;">
                 <span style="color: white; font-weight: 600;">📧 Notification Settings</span>
             </div>
