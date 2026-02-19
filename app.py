@@ -5940,7 +5940,7 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # Version Info - Collapsible expander
+    # Version Info - Collapsible expander with changelog dropdown
     with st.expander("ℹ️ Version Info", expanded=False):
         st.markdown(f"""
             **Version:** {APP_VERSION.split(' - ')[0]}  
@@ -5948,9 +5948,57 @@ with st.sidebar:
             **Build:** {APP_VERSION.split(' - ')[1] if ' - ' in APP_VERSION else 'Production'}
         """)
         
+        # "View Changelog" button (leads to full changelog page)
         if st.button("📋 View Changelog", use_container_width=True, key="sidebar_changelog"):
             st.session_state.current_page = "Version"
             st.rerun()
+        
+        st.markdown("---")
+        
+        # Recent version changelog in blue box (like the screenshot)
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); 
+                 padding: 14px; border-radius: 10px; margin-top: 12px;
+                 border-left: 4px solid #3b82f6;">
+                <strong style="color: #1e40af; font-size: 0.9em;">
+                    v6.10.0 (2026-02-18 17:00 EST) - 🎯 COMPLETE TAX OPTIMIZATION SUITE
+                </strong>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("")
+        
+        # Structured changelog matching screenshot format
+        st.markdown("""
+        **FIXED:**
+        
+        • User Impersonation now working correctly across all pages:
+          ○ Portfolio Analytics ✅
+          ○ Global Dashboard ✅  
+          ○ Rebalance Analysis ✅
+        
+        • RRSP Deadline Banner displays with 4 urgency levels
+        
+        • TFSA Room Validation catches incorrect entries
+        
+        • Navigation tabs use blue highlights (consistent colors)
+        
+        **BENEFIT:** 
+        
+        Consistent, professional display across entire application
+        
+        ---
+        
+        **Bugs Fixed:**
+        
+        1. Impersonation indicator moved to sidebar (was in main area)
+        
+        2. Tab highlights changed from red to blue for consistency  
+        
+        3. TFSA contribution data now visible in debug panel
+        
+        4. Room validation warns when values appear incorrect
+        """)
     
     st.divider()
     
