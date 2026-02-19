@@ -6401,6 +6401,32 @@ if st.session_state.current_page == "Home":
             
             st.markdown("")
             
+            # v6.10.0: Check if TFSA room looks incorrect (too low for the year)
+            # Rough estimate: By 2029, should have at least (starting room in 2018) + (years × $7,000)
+            # 2018 was first year, so 2029 = 11 years of accumulation minimum
+            years_since_tfsa_start = max(0, int(latest_year) - 2009)  # TFSA started in 2009
+            expected_minimum_tfsa_room = years_since_tfsa_start * 7000  # Very conservative estimate
+            
+            if tfsa_room > 0 and tfsa_room < expected_minimum_tfsa_room * 0.5:
+                st.warning(f"""
+                    ⚠️ **TFSA Room May Be Incorrect**
+                    
+                    Your {latest_year} TFSA room shows **${tfsa_room:,.0f}**, which seems unusually low.
+                    
+                    As a rough estimate, by {latest_year} most Canadians should have at least ${expected_minimum_tfsa_room:,.0f} 
+                    in accumulated TFSA room (based on the annual limits since 2009).
+                    
+                    **Common mistake:** Entering only the annual NEW room ($7,000) instead of your TOTAL accumulated room.
+                    
+                    **How to fix:**
+                    1. Check your actual TFSA room on CRA MyAccount
+                    2. Click the {latest_year} year tile below
+                    3. Update "Your TFSA Room" to the correct accumulated amount
+                    4. Click Save
+                    
+                    **Remember:** TFSA room accumulates FOREVER. Unused room from past years carries forward!
+                """)
+            
             # TFSA Progress Bar
             col_pb3, col_pb4 = st.columns([3, 1])
             
@@ -6977,6 +7003,36 @@ if st.session_state.current_page == "Home":
         - **Excess Contributions:** Any contributions made at any time in a month over your available contribution room is an excess contribution. You will be liable to a **1% monthly tax** on your highest excess TFSA amount until you remove it.
         
         - **Non-Resident Contributions:** If you make contributions after you cease to be a resident of Canada, you may have to pay a tax on those contributions. For more information, visit [Tax payable on TFSAs - Canada.ca](https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/tax-free-savings-account/tax-payable-on-tfsas.html).
+        
+        ---
+        
+        **🔢 CRITICAL: How TFSA Room Accumulates**
+        
+        **TFSA room is CUMULATIVE - it NEVER expires!**
+        
+        **Example:**
+        ```
+        2024: You have $90,000 room
+              You contribute $5,000
+              Remaining: $85,000 → CARRIES FORWARD
+        
+        2025: Previous $85,000 + New $7,000 = $92,000 total room
+              You contribute $10,000
+              Remaining: $82,000 → CARRIES FORWARD
+        
+        2026: Previous $82,000 + New $7,000 = $89,000 total room
+              (And so on...)
+        ```
+        
+        **Common Mistake:** Entering only the new annual room ($7,000) instead of your total accumulated room!
+        
+        **Your TFSA room = ALL unused room from past years + this year's new room**
+        
+        **How to find your REAL TFSA room:**
+        1. Login to CRA MyAccount
+        2. Go to TFSA section
+        3. Your "TFSA contribution room" shows your TOTAL accumulated room
+        4. Use THIS number when entering "Your TFSA Room" in this app
         
         ⚠️ **Pro Tip:** Always maintain your own records and compare them with CRA's information to avoid accidental over-contributions and penalties.
         """)
@@ -7849,8 +7905,47 @@ else:
                 help="From CRA MyAccount (auto-filled from previous year if available)"
             )
             
-            if prev_year in all_history and default_rrsp_room > 0:
+            # v6.10.0: Validate TFSA room - warn if it seems too low
+            if prev_year in all_history and default_tfsa_room > 0:
                 st.caption(f"ℹ️ Auto-calculated from {prev_year} carryover + new room")
+                
+                # Check if manually entered value is significantly different from calculated
+                if tfsa_room < default_tfsa_room * 0.8:  # More than 20% lower
+                    difference = default_tfsa_room - tfsa_room
+                    st.warning(f"""
+                        ⚠️ **TFSA Room Validation Warning**
+                        
+                        Your entered TFSA room (${tfsa_room:,.0f}) is significantly lower than the auto-calculated value (${default_tfsa_room:,.0f}).
+                        
+                        **Expected calculation:**
+                        - Previous year ({prev_year}) remaining: ${prev_tfsa_room_remaining:,.0f}
+                        - New room for {selected_year}: +$7,000
+                        - **Expected total: ${default_tfsa_room:,.0f}**
+                        
+                        **Your entered value: ${tfsa_room:,.0f}**
+                        **Difference: ${difference:,.0f} LESS than expected**
+                        
+                        **Common mistake:** Entering only the NEW annual room ($7,000) instead of ACCUMULATED room.
+                        
+                        **Remember:** TFSA room ACCUMULATES forever! If you had ${prev_tfsa_room_remaining:,.0f} unused last year, 
+                        you get to KEEP that AND add the new $7,000.
+                        
+                        💡 **Tip:** Update to ${default_tfsa_room:,.0f} if this is a mistake, or leave as-is if you have a specific reason.
+                    """)
+                elif tfsa_room > default_tfsa_room * 1.2:  # More than 20% higher
+                    difference = tfsa_room - default_tfsa_room
+                    st.info(f"""
+                        ℹ️ **TFSA Room Note**
+                        
+                        Your entered TFSA room (${tfsa_room:,.0f}) is ${difference:,.0f} higher than auto-calculated (${default_tfsa_room:,.0f}).
+                        
+                        This might be correct if you have additional room from:
+                        - Years before {prev_year} that weren't tracked in this app
+                        - Withdrawals made in previous years (recontribution room)
+                        - Verified your actual room on CRA MyAccount
+                        
+                        ✅ If you verified this with CRA MyAccount, this is fine!
+                    """)
             
             # Show YOUR personal RRSP room usage (before spousal)
             if rrsp_room > 0:
