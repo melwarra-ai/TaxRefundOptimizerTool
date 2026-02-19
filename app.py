@@ -7300,6 +7300,9 @@ if st.session_state.current_page == "Home":
         room_data = []
         burndown_data = []
         
+        # v6.10.0: Debug TFSA data loading
+        tfsa_debug_info = []
+        
         for yr, data in sorted(all_history.items(), key=lambda x: x[0]):
             t4_gross = data.get('t4_gross_income', 0)
             other_inc = data.get('other_income', 0)
@@ -7308,6 +7311,13 @@ if st.session_state.current_page == "Home":
             # Use helper function for RRSP calculation
             annual_rrsp = calculate_annual_rrsp(data)
             tfsa_contrib = data.get('tfsa_lump_sum', 0)
+            
+            # Debug: Track TFSA contributions
+            tfsa_debug_info.append({
+                'year': yr,
+                'tfsa_lump_sum': tfsa_contrib,
+                'has_data': tfsa_contrib > 0
+            })
             
             rrsp_room_avail = data.get('rrsp_room', 0)
             tfsa_room_avail = data.get('tfsa_room', 0)
@@ -7361,6 +7371,30 @@ if st.session_state.current_page == "Home":
         df_chart = pd.DataFrame(chart_data)
         df_room = pd.DataFrame(room_data)
         df_burndown = pd.DataFrame(burndown_data)
+        
+        # v6.10.0: Debug section to verify TFSA data
+        with st.expander("🔍 Debug: TFSA Contribution Data", expanded=False):
+            st.markdown("**Loaded TFSA Data from Database:**")
+            debug_df = pd.DataFrame(tfsa_debug_info)
+            if not debug_df.empty:
+                st.dataframe(debug_df, use_container_width=True)
+                
+                # Show summary
+                total_tfsa_years = len(debug_df)
+                years_with_tfsa = len(debug_df[debug_df['has_data']])
+                years_without_tfsa = total_tfsa_years - years_with_tfsa
+                
+                col_d1, col_d2, col_d3 = st.columns(3)
+                with col_d1:
+                    st.metric("Total Years", total_tfsa_years)
+                with col_d2:
+                    st.metric("Years with TFSA", years_with_tfsa, delta="Has contributions")
+                with col_d3:
+                    st.metric("Years without TFSA", years_without_tfsa, delta="Zero contributions")
+                
+                st.caption("💡 **Tip:** If years show $0 TFSA but you entered contributions, the data may not have been saved. Go to each year's planning page and verify your TFSA Lump Sum Deposit is entered and saved.")
+            else:
+                st.info("No planning years found. Create years to see TFSA data.")
         
         # RRSP & TFSA Burndown Charts
         st.markdown("### 📉 Contribution Room Burndown Analysis")
@@ -7467,6 +7501,18 @@ if st.session_state.current_page == "Home":
                 **Strategy tip:**
                 - Deploy your RRSP tax refunds here
                 - RRSP → Tax refund → TFSA = Double benefit
+                
+                ---
+                
+                **⚠️ Seeing all gray bars?**
+                
+                If your TFSA chart shows only gray (no blue), it means no TFSA contributions were saved for those years. This could mean:
+                
+                1. **You haven't entered TFSA data yet** - Go to each year's planning page (click the year tile on Home) and enter your "TFSA Lump Sum Deposit" amount, then click Save.
+                
+                2. **Data wasn't saved** - If you entered values but see $0 here, try re-entering and saving again. Check the "🔍 Debug: TFSA Contribution Data" section above to see what's actually stored.
+                
+                3. **You genuinely didn't contribute to TFSA** - That's okay! You can plan future contributions using the app's strategic recommendations.
                 """)
         
         st.divider()
