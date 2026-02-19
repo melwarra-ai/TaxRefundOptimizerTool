@@ -4088,7 +4088,27 @@ def show_admin_dashboard():
                     
                     with col_card2:
                         st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-                        st.button("👁️ View", key=f"view_user_{user['user_id']}", use_container_width=True)
+                        if st.button("👁️ View", key=f"view_user_{user['user_id']}", use_container_width=True):
+                            # Don't allow viewing yourself
+                            if user['user_id'] == st.session_state.user_id:
+                                st.warning("You're already viewing your own account!")
+                            else:
+                                # Store original admin session
+                                st.session_state.original_user_id = st.session_state.user_id
+                                st.session_state.original_username = st.session_state.username
+                                st.session_state.original_email = st.session_state.email
+                                st.session_state.original_role = st.session_state.role
+                                
+                                # Switch to impersonated user
+                                st.session_state.user_id = user['user_id']
+                                st.session_state.username = user['username']
+                                st.session_state.email = user['email']
+                                st.session_state.role = user['role']
+                                st.session_state.is_impersonating = True
+                                st.session_state.current_page = "Home"
+                                
+                                st.success(f"✅ Now viewing as: **{user['username']}**")
+                                st.rerun()
             else:
                 st.info("📭 No users found in the system")
         
@@ -4803,35 +4823,34 @@ def show_admin_dashboard():
                 st.markdown("")
                 st.markdown("")
                 if st.button("🔐 Login as This User", type="primary", use_container_width=True, key="impersonate_btn"):
-                    # Save original admin session
-                    if 'original_admin_id' not in st.session_state:
-                        st.session_state.original_admin_id = st.session_state.user_id
-                        st.session_state.original_admin_username = st.session_state.username
+                    # Store original admin session
+                    st.session_state.original_user_id = st.session_state.user_id
+                    st.session_state.original_username = st.session_state.username
+                    st.session_state.original_email = st.session_state.email
+                    st.session_state.original_role = st.session_state.role
                     
-                    # Switch to target user
+                    # Switch to impersonated user
                     st.session_state.user_id = selected_user['user_id']
                     st.session_state.username = selected_user['username']
                     st.session_state.email = selected_user['email']
                     st.session_state.role = selected_user['role']
-                    st.session_state.impersonating = True
+                    st.session_state.is_impersonating = True
+                    st.session_state.current_page = "Home"
                     
-                    st.success(f"✅ Now logged in as **{selected_user['username']}**")
-                    st.info("👑 You are impersonating this user. Click 'Return to Admin' in sidebar to switch back.")
+                    st.success(f"✅ Now viewing as: **{selected_user['username']}**")
                     st.rerun()
         
         # Show return button if impersonating
-        if st.session_state.get('impersonating', False):
+        if st.session_state.get('is_impersonating', False):
             st.markdown("")
-            if st.button("👑 Return to Admin Account", type="secondary", use_container_width=True, key="return_admin_btn"):
-                # Restore admin session
-                st.session_state.user_id = st.session_state.original_admin_id
-                st.session_state.username = st.session_state.original_admin_username
-                st.session_state.role = 'admin'
-                st.session_state.impersonating = False
-                
-                # Clean up
-                del st.session_state.original_admin_id
-                del st.session_state.original_admin_username
+            if st.button("🔙 Return to Admin Account", type="secondary", use_container_width=True, key="return_admin_btn"):
+                # Restore original admin session
+                st.session_state.user_id = st.session_state.original_user_id
+                st.session_state.username = st.session_state.original_username
+                st.session_state.email = st.session_state.original_email
+                st.session_state.role = st.session_state.original_role
+                st.session_state.is_impersonating = False
+                st.session_state.current_page = "Admin"
                 
                 st.success("✅ Returned to admin account")
                 st.rerun()
