@@ -63,13 +63,37 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.10.1 - Inline Changelog Display"
+APP_VERSION = "6.10.2 - Changelog Format & Styling"
 APP_DATE = "February 19, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎨 Version 6.10.2 - Changelog Format & Styling (Feb 19, 2026)
+
+### 🐛 BUG FIX
+
+**Changelog Display Formatting:**
+- Updated changelog colors to match Portfolio Optimizer standard
+- Changed background from gradient to solid #e3f2fd (light blue)
+- Updated text colors for better contrast and readability
+- Added proper spacing and margins
+- Formatted bullet points with HTML for precise control
+- Added "Solution:" section to each version
+- Shows multiple versions (current + previous)
+- Professional, consistent appearance
+
+**Technical Details:**
+- Background: #e3f2fd (light blue, not gradient)
+- Header: #1565c0 (dark blue)
+- Bullets: #1976d2 (medium blue)
+- Body text: #424242 (dark gray)
+- Proper HTML paragraph spacing
+- Checkmarks (✅) on sub-items
+
+---
+
 ## 🔧 Version 6.10.1 - Inline Changelog Display (Feb 19, 2026)
 
 ### 🐛 BUG FIX
@@ -5978,43 +6002,86 @@ with st.sidebar:
         
         # Show changelog inline when toggled
         if st.session_state.show_changelog_inline:
-            st.markdown("---")
-            
-            # v6.10.1 changelog
+            # v6.10.2 changelog - matching Portfolio Optimizer format EXACTLY
             st.markdown("""
-                <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); 
-                     padding: 14px; border-radius: 10px; margin-top: 12px;
-                     border-left: 4px solid #3b82f6;">
-                    <strong style="color: #1e40af; font-size: 0.9em;">
-                        v6.10.1 (2026-02-19) - 🔧 INLINE CHANGELOG DISPLAY
-                    </strong>
+                <div style="background: #e3f2fd; 
+                     padding: 16px; border-radius: 8px; margin-top: 16px; margin-bottom: 16px;">
+                    <p style="color: #1565c0; font-weight: 600; font-size: 0.95em; margin: 0 0 12px 0;">
+                        v6.10.2 (2026-02-19 18:00 EST) - 🎨 CHANGELOG FORMAT & STYLING
+                    </p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 12px 0 8px 0;">• FIXED: Changelog display now matches Portfolio Optimizer standard</p>
+                    <p style="color: #424242; margin: 4px 0 4px 24px;">○ Updated colors to light blue background (#e3f2fd) ✅</p>
+                    <p style="color: #424242; margin: 4px 0 4px 24px;">○ Improved text contrast with dark blue headers ✅</p>
+                    <p style="color: #424242; margin: 4px 0 4px 24px;">○ Added proper spacing and margins ✅</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 12px 0 8px 0;">• FIXED: Structured format with FIXED/BENEFIT/Bugs Fixed/Solution sections</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 12px 0 8px 0;">• BENEFIT: Consistent, professional display matching industry standards</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 16px 0 8px 0;">Bugs Fixed:</p>
+                    <p style="color: #424242; margin: 4px 0 4px 12px;">1. Changelog used gradient background (changed to solid light blue)</p>
+                    <p style="color: #424242; margin: 4px 0 4px 12px;">2. Text colors had low contrast (updated to match Portfolio Optimizer)</p>
+                    <p style="color: #424242; margin: 4px 0 4px 12px;">3. Spacing was inconsistent (standardized margins and padding)</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 16px 0 8px 0;">Solution:</p>
+                    <p style="color: #424242; margin: 4px 0 4px 0;">Changelog now uses HTML-based formatting with exact color codes (#e3f2fd, #1565c0, #1976d2) matching the Portfolio Optimizer screenshot. All spacing, colors, and structure now follow professional design standards.</p>
                 </div>
             """, unsafe_allow_html=True)
             
-            st.markdown("")
-            
+            # v6.10.1 changelog
             st.markdown("""
-            **FIXED:**
+                <div style="background: #e3f2fd; 
+                     padding: 16px; border-radius: 8px; margin-top: 16px; margin-bottom: 16px;">
+                    <p style="color: #1565c0; font-weight: 600; font-size: 0.95em; margin: 0 0 12px 0;">
+                        v6.10.1 (2026-02-19 17:00 EST) - 🔧 INLINE CHANGELOG DISPLAY
+                    </p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 12px 0 8px 0;">• FIXED: View Changelog button behavior</p>
+                    <p style="color: #424242; margin: 4px 0 4px 24px;">○ Button now toggles inline display ✅</p>
+                    <p style="color: #424242; margin: 4px 0 4px 24px;">○ No navigation to separate page ✅</p>
+                    <p style="color: #424242; margin: 4px 0 4px 24px;">○ Maintains user context ✅</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 12px 0 8px 0;">• BENEFIT: Better user experience with instant changelog access</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 16px 0 8px 0;">Bugs Fixed:</p>
+                    <p style="color: #424242; margin: 4px 0 4px 12px;">1. View Changelog button forced navigation to separate page</p>
+                    <p style="color: #424242; margin: 4px 0 4px 12px;">2. Users lost context when viewing changelog</p>
+                    <p style="color: #424242; margin: 4px 0 4px 12px;">3. Required extra clicks to return to previous page</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 16px 0 8px 0;">Solution:</p>
+                    <p style="color: #424242; margin: 4px 0 4px 0;">Changelog now expands/collapses inline using session state. Users can toggle visibility with one click, maintaining workflow continuity.</p>
+                </div>
+            """, unsafe_allow_html=True)
             
-            • View Changelog button now expands inline (doesn't navigate away)
-            
-            • Changelog details show/hide within Version Info dropdown
-            
-            • Improved UX - view changes without leaving page
-            
-            **BENEFIT:** 
-            
-            Better user experience with instant changelog access
-            
-            ---
-            
-            **Previous Version: v6.10.0 (2026-02-18)**
-            
-            • User Impersonation across all pages ✅
-            • RRSP Deadline Banner with 4 urgency levels ✅
-            • TFSA Room Validation ✅
-            • Navigation tabs use blue highlights ✅
-            """)
+            # v6.10.0 changelog - previous version
+            st.markdown("""
+                <div style="background: #e3f2fd; 
+                     padding: 16px; border-radius: 8px; margin-top: 16px; margin-bottom: 16px;">
+                    <p style="color: #1565c0; font-weight: 600; font-size: 0.95em; margin: 0 0 12px 0;">
+                        v6.10.0 (2026-02-18 17:00 EST) - 🎯 COMPLETE TAX OPTIMIZATION SUITE
+                    </p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 12px 0 8px 0;">• FIXED: User Impersonation now working correctly across all pages:</p>
+                    <p style="color: #424242; margin: 4px 0 4px 24px;">○ Portfolio Analytics ✅</p>
+                    <p style="color: #424242; margin: 4px 0 4px 24px;">○ Global Dashboard ✅</p>
+                    <p style="color: #424242; margin: 4px 0 4px 24px;">○ Tax Planning Pages ✅</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 12px 0 8px 0;">• FIXED: RRSP Deadline Banner displays with 4 urgency levels</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 12px 0 8px 0;">• FIXED: TFSA Room Validation catches incorrect entries</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 12px 0 8px 0;">• BENEFIT: Consistent, professional display across entire application</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 16px 0 8px 0;">Bugs Fixed:</p>
+                    <p style="color: #424242; margin: 4px 0 4px 12px;">1. Impersonation indicator was in main area (moved to sidebar)</p>
+                    <p style="color: #424242; margin: 4px 0 4px 12px;">2. Tab highlights were red (changed to blue for consistency)</p>
+                    <p style="color: #424242; margin: 4px 0 4px 12px;">3. TFSA contribution data not visible (added debug panel)</p>
+                    
+                    <p style="color: #1976d2; font-weight: 600; margin: 16px 0 8px 0;">Solution:</p>
+                    <p style="color: #424242; margin: 4px 0 4px 0;">All features now follow consistent design patterns with professional blue color scheme and comprehensive validation.</p>
+                </div>
+            """, unsafe_allow_html=True)
     
     st.divider()
     
