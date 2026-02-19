@@ -63,13 +63,60 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.9.0 - Multi-Admin Notification System"
+APP_VERSION = "6.10.0 - User Impersonation & Home Tab"
 APP_DATE = "February 18, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🎭 Version 6.10.0 - User Impersonation & Home Tab (Feb 18, 2026)
+
+### 🔐 ADMIN IMPERSONATION FEATURE
+
+**View as User (Admin Only):**
+- Admins can impersonate any user to view their account
+- Helpful for troubleshooting and customer support
+- Clear visual indicator when in impersonation mode
+- Easy return to admin dashboard
+
+**Impersonation Mode Banner:**
+- Orange warning banner at top: "⚠️ IMPERSONATION MODE"
+- Shows "Admin viewing as: {username}"
+- "🔙 Return to Admin Dashboard" button
+- Only visible to admins during impersonation
+- Regular users never see this
+
+**Security & Privacy:**
+- Only admins can impersonate
+- Impersonation clearly indicated (never hidden)
+- Original admin identity preserved
+- Easy exit from impersonation mode
+
+**How to Use:**
+1. Go to Admin Dashboard → User Management
+2. Select user from dropdown
+3. Click "👁️ View as User" button
+4. See user's account exactly as they see it
+5. Click "Return to Admin Dashboard" to exit
+
+### 🏠 HOME TAB FOR USERS
+
+**New "Home" Navigation:**
+- Dedicated "🏠 Home" button in sidebar
+- Takes users to main planning dashboard
+- Where users manage their tax years
+- Clear navigation for all users
+
+**Navigation Structure:**
+- 🏠 Home (tax year planning)
+- 👥 Admin Dashboard (admins only)
+- 👤 Profile Settings
+- 📧 Notification Settings
+- 🚪 Logout
+
+---
+
 ## 🚀 Version 6.9.0 - Multi-Admin Notification System (Feb 18, 2026)
 
 ### 🎯 COMPLETE NOTIFICATION OPTIMIZATION
@@ -3418,6 +3465,18 @@ def init_session_state():
         st.session_state.selected_year = 2025
     if "saved_flag" not in st.session_state:
         st.session_state.saved_flag = False
+    
+    # v6.10.0: Impersonation state
+    if "is_impersonating" not in st.session_state:
+        st.session_state.is_impersonating = False
+    if "original_user_id" not in st.session_state:
+        st.session_state.original_user_id = None
+    if "original_username" not in st.session_state:
+        st.session_state.original_username = None
+    if "original_email" not in st.session_state:
+        st.session_state.original_email = None
+    if "original_role" not in st.session_state:
+        st.session_state.original_role = None
 
 init_session_state()
 
@@ -4124,6 +4183,67 @@ def show_admin_dashboard():
                     
                     except Exception as e:
                         st.error(f"Error executing action: {e}")
+                
+                # v6.10.0: Impersonation Feature
+                st.divider()
+                st.markdown("### 👁️ View as User (Impersonation)")
+                st.caption("View the application as if you were logged in as the selected user. Helpful for troubleshooting and support.")
+                
+                col_impersonate1, col_impersonate2, col_impersonate3 = st.columns([2, 2, 1])
+                
+                with col_impersonate1:
+                    # Exclude admin from impersonation list (can't impersonate yourself)
+                    non_admin_users = [u for u in users if u['user_id'] != st.session_state.user_id]
+                    
+                    if non_admin_users:
+                        impersonate_username = st.selectbox(
+                            "Select User to View As",
+                            options=[u['username'] for u in non_admin_users],
+                            key="admin_impersonate_select"
+                        )
+                    else:
+                        st.info("No other users to impersonate")
+                        impersonate_username = None
+                
+                with col_impersonate2:
+                    st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                    if impersonate_username:
+                        st.info(f"You will see the app as **{impersonate_username}** sees it")
+                
+                with col_impersonate3:
+                    st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                    if impersonate_username:
+                        impersonate_btn = st.button("👁️ View as User", type="secondary", use_container_width=True, key="admin_impersonate_btn")
+                        
+                        if impersonate_btn:
+                            # Find selected user
+                            selected_impersonate_user = next(u for u in users if u['username'] == impersonate_username)
+                            
+                            # Store original admin session
+                            st.session_state.original_user_id = st.session_state.user_id
+                            st.session_state.original_username = st.session_state.username
+                            st.session_state.original_email = st.session_state.email
+                            st.session_state.original_role = st.session_state.role
+                            
+                            # Switch to impersonated user
+                            st.session_state.user_id = selected_impersonate_user['user_id']
+                            st.session_state.username = selected_impersonate_user['username']
+                            st.session_state.email = selected_impersonate_user['email']
+                            st.session_state.role = selected_impersonate_user['role']
+                            st.session_state.is_impersonating = True
+                            st.session_state.current_page = "Home"
+                            
+                            st.success(f"✅ Now viewing as: **{impersonate_username}**")
+                            st.rerun()
+                
+                st.warning("""
+                    ⚠️ **Impersonation Mode:**
+                    - You will see the user's account exactly as they see it
+                    - A clear banner will indicate you're in impersonation mode
+                    - Click "Return to Admin Dashboard" to exit impersonation
+                    - Use this feature ethically and only for support purposes
+                """)
+                
             else:
                 st.info("📭 No users found")
         
@@ -5548,8 +5668,46 @@ if not st.session_state.logged_in:
 # Load user's data
 all_history = load_all_data(st.session_state.user_id)
 
+# v6.10.0: Impersonation Mode Banner (Admin Only)
+if st.session_state.get('is_impersonating', False) and st.session_state.get('original_role') == 'admin':
+    st.markdown("""
+        <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+             padding: 20px; border-radius: 12px; margin-bottom: 20px; 
+             box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <div style="color: white; font-weight: 600; font-size: 1.1em; margin-bottom: 8px;">
+                        🔐 Admin viewing as:
+                    </div>
+                    <div style="color: white; font-size: 1.4em; font-weight: 700;">
+                        👤 {username}
+                    </div>
+                </div>
+                <div style="background: #fef3c7; color: #78350f; padding: 8px 20px; 
+                     border-radius: 20px; font-weight: 700; font-size: 1em;">
+                    ⚠️ IMPERSONATION MODE
+                </div>
+            </div>
+        </div>
+    """.format(username=st.session_state.username), unsafe_allow_html=True)
+    
+    # Return to Admin Dashboard button
+    col_return1, col_return2, col_return3 = st.columns([1, 2, 1])
+    with col_return2:
+        if st.button("🔙 Return to Admin Dashboard", use_container_width=True, type="primary"):
+            # Restore original admin session
+            st.session_state.user_id = st.session_state.original_user_id
+            st.session_state.username = st.session_state.original_username
+            st.session_state.email = st.session_state.original_email
+            st.session_state.role = st.session_state.original_role
+            st.session_state.is_impersonating = False
+            st.session_state.current_page = "Admin"
+            st.rerun()
+    
+    st.markdown("<hr style='margin: 30px 0; border: none; border-top: 2px solid #e2e8f0;'>", unsafe_allow_html=True)
+
 # v6.9.0: Admin Email Setup Warning - Show if admin is using fake/test email
-if st.session_state.role == 'admin':
+if st.session_state.role == 'admin' and not st.session_state.get('is_impersonating', False):
     # Query database to get saved notification_email
     notification_email_to_check = st.session_state.email  # Default to login email
     
@@ -5657,8 +5815,21 @@ with st.sidebar:
     # Navigation buttons with RED highlighting for selected page
     current_page = st.session_state.current_page
     
-    # Admin dashboard button (only for admins) - RED when selected
-    if st.session_state.role == 'admin':
+    # v6.10.0: Home button - RED when selected (for all users)
+    if current_page == "Home":
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); 
+                 padding: 12px; border-radius: 8px; margin-bottom: 8px; text-align: center;">
+                <span style="color: white; font-weight: 600;">🏠 Home</span>
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        if st.button("🏠 Home", use_container_width=True, key="main_home_btn"):
+            st.session_state.current_page = "Home"
+            st.rerun()
+    
+    # Admin dashboard button (only for admins and not impersonating) - RED when selected
+    if st.session_state.role == 'admin' and not st.session_state.get('is_impersonating', False):
         if current_page == "Admin":
             st.markdown("""
                 <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); 
@@ -5706,11 +5877,17 @@ with st.sidebar:
         st.session_state.email = None
         st.session_state.role = None
         st.session_state.session_token = None
+        # v6.10.0: Clear impersonation state
+        st.session_state.is_impersonating = False
+        st.session_state.original_user_id = None
+        st.session_state.original_username = None
+        st.session_state.original_email = None
+        st.session_state.original_role = None
         st.rerun()
 
-# Show admin dashboard if selected (admin only)
+# Show admin dashboard if selected (admin only - not when impersonating)
 if st.session_state.current_page == "Admin":
-    if st.session_state.role == 'admin':
+    if st.session_state.role == 'admin' and not st.session_state.get('is_impersonating', False):
         show_admin_dashboard()
         st.stop()
     else:
