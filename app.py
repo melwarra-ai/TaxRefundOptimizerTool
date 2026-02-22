@@ -63,13 +63,31 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.12.0 - Accurate Refund Calculation"
+APP_VERSION = "6.12.1 - Fix Deadline Dashboard Refund Display"
 APP_DATE = "February 20, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🐛 Version 6.12.1 - Fix Deadline Dashboard Refund Display (Feb 20, 2026)
+
+### 🐛 BUG FIX
+
+**Fixed "March 1st Deadline Dashboard" Section:**
+- "Expected Refund" now shows actual refund when Box 22 provided
+- Shows tax savings when Box 22 not provided
+- Net Cashflow calculation uses correct refund value
+- Consistent with rest of application
+
+**What Changed:**
+- Metric label adapts based on Box 22 availability
+- Shows actual refund ($-11,017) not tax savings ($22,363)
+- Net cashflow calculation accurate
+- Complete consistency throughout app
+
+---
+
 ## ✨ Version 6.12.0 - Accurate Refund Calculation (Feb 20, 2026)
 
 ### ✨ NEW FEATURE
@@ -6192,6 +6210,21 @@ with st.sidebar:
         
         # Show changelog inline when toggled
         if st.session_state.show_changelog_inline:
+            # v6.12.1 changelog - Fix Deadline Dashboard Refund Display
+            st.markdown('<div style="background: #e3f2fd; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6;">', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1565c0; font-weight: 600; font-size: 1em; margin: 0 0 16px 0;">v6.12.1 (2026-02-20 13:00 EST) - 🐛 FIX DEADLINE DASHBOARD REFUND</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 4px 0; font-size: 0.95em;">• FIXED: "March 1st Deadline Dashboard" now shows correct refund value</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Shows actual refund when Box 22 provided ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Shows tax savings when Box 22 not provided ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 28px; font-size: 0.95em; line-height: 1.5;">○ Net cashflow uses correct value ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 16px 0; font-size: 0.95em;">• BENEFIT: 100% consistency throughout entire application</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 8px 0; font-size: 0.95em;">Bugs Fixed:</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 0; font-size: 0.95em;">1. Deadline dashboard showed "Expected Refund: $22,363" (tax savings)</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 0; font-size: 0.95em;">2. Should show "Actual Refund: $-11,017" (what you owe/get)</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 8px 0; font-size: 0.95em;">Solution:</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0; font-size: 0.95em;">Updated metrics to use actual_refund when Box 22 provided, tax_savings_from_rrsp otherwise. Net cashflow calculation now accurate. Complete consistency achieved across Strategic Overview, Feedback Loop, and Deadline Dashboard.</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             # v6.12.0 changelog - Accurate Refund Calculation
             st.markdown('<div style="background: #e3f2fd; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6;">', unsafe_allow_html=True)
             st.markdown('<p style="color: #1565c0; font-weight: 600; font-size: 1em; margin: 0 0 16px 0;">v6.12.0 (2026-02-20 12:00 EST) - ✨ ACCURATE REFUND CALCULATION</p>', unsafe_allow_html=True)
@@ -9918,15 +9951,32 @@ else:
         )
     
     with ac5:
-        st.metric(
-            "Expected Refund",
-            f"${estimated_refund:,.0f}",
-            delta=f"+{(estimated_refund/max(1,total_rrsp_contributions))*100:.1f}%",
-            help="Tax refund from ALL RRSP contributions (personal + spousal)"
-        )
+        # v6.12.1: Show actual refund if Box 22 provided, otherwise show tax savings
+        if actual_refund is not None:
+            # User provided Box 22 - show ACTUAL refund
+            refund_label = "Actual Refund from CRA" if actual_refund >= 0 else "Amount Owing to CRA"
+            refund_delta = "from CRA" if actual_refund > 0 else "owe to CRA"
+            refund_delta_color = "normal" if actual_refund >= 0 else "inverse"
+            st.metric(
+                refund_label,
+                f"${actual_refund:,.0f}",
+                delta=refund_delta,
+                delta_color=refund_delta_color,
+                help="Actual refund/owing based on tax withheld (Box 22) and tax owed after RRSP + credits"
+            )
+        else:
+            # No Box 22 - show tax savings
+            st.metric(
+                "Tax Savings from RRSP",
+                f"${tax_savings_from_rrsp:,.0f}",
+                delta=f"+{(tax_savings_from_rrsp/max(1,total_rrsp_contributions))*100:.1f}%",
+                help="Tax savings from ALL RRSP contributions (personal + spousal). Enter Box 22 to see actual refund."
+            )
     
     with ac6:
-        net_cashflow = estimated_refund - rrsp_lump_sum - spousal_rrsp_contribution - tfsa_lump_sum
+        # v6.12.1: Use actual refund for cashflow if available, otherwise tax savings
+        refund_for_cashflow = actual_refund if actual_refund is not None else tax_savings_from_rrsp
+        net_cashflow = refund_for_cashflow - rrsp_lump_sum - spousal_rrsp_contribution - tfsa_lump_sum
         st.metric(
             "Net Cashflow Impact",
             f"${net_cashflow:,.0f}",
