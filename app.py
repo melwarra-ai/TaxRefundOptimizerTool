@@ -63,13 +63,32 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.11.0 - Tax Refund vs Savings Fix"
+APP_VERSION = "6.11.1 - Complete Refund Terminology Fix"
 APP_DATE = "February 20, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🐛 Version 6.11.1 - Complete Refund Terminology Fix (Feb 20, 2026)
+
+### 🐛 BUG FIX
+
+**Fixed "The Feedback Loop" Section:**
+- Updated description box to use correct terminology
+- Changed "Tax Refund Generated" to "Tax Savings from RRSP"
+- Added actual refund display when Box 22 provided
+- Fixed calculator to reference correct values
+- Consistent terminology throughout entire app
+
+**What Changed:**
+- Description now says "save you $X in taxes" not "generate refund of $X"
+- Metrics show both tax savings AND actual refund (when Box 22 entered)
+- Deployment calculator uses actual refund for planning
+- All references updated for consistency
+
+---
+
 ## ✨ Version 6.11.0 - Tax Refund vs Savings Fix (Feb 20, 2026)
 
 ### 🎯 NEW FEATURE
@@ -6056,6 +6075,22 @@ with st.sidebar:
         
         # Show changelog inline when toggled
         if st.session_state.show_changelog_inline:
+            # v6.11.1 changelog - Complete Refund Terminology Fix
+            st.markdown('<div style="background: #e3f2fd; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6;">', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1565c0; font-weight: 600; font-size: 1em; margin: 0 0 16px 0;">v6.11.1 (2026-02-20 11:00 EST) - 🐛 COMPLETE REFUND TERMINOLOGY FIX</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 4px 0; font-size: 0.95em;">• FIXED: "The Feedback Loop" section now uses correct terminology</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Changed "Tax Refund Generated" to "Tax Savings from RRSP" ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Shows actual refund when Box 22 provided ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 28px; font-size: 0.95em; line-height: 1.5;">○ Deployment calculator uses correct values ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 16px 0; font-size: 0.95em;">• BENEFIT: Consistent terminology throughout entire application</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 8px 0; font-size: 0.95em;">Bugs Fixed:</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 0; font-size: 0.95em;">1. Feedback Loop showed "refund of $22,363" (actually tax savings)</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 0; font-size: 0.95em;">2. Metric said "Tax Refund Generated" instead of correct terminology</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 0; font-size: 0.95em;">3. Calculator referenced wrong value for planning</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 8px 0; font-size: 0.95em;">Solution:</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0; font-size: 0.95em;">Updated all text in Feedback Loop section to use "tax savings" when Box 22 not provided, or "actual refund" when Box 22 is entered. All calculations now reference the correct value ($12,963 actual vs $22,363 savings).</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             # v6.11.0 changelog - Tax Refund vs Savings Fix
             st.markdown('<div style="background: #e3f2fd; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6;">', unsafe_allow_html=True)
             st.markdown('<p style="color: #1565c0; font-weight: 600; font-size: 1em; margin: 0 0 16px 0;">v6.11.0 (2026-02-20 10:00 EST) - ✨ TAX REFUND VS SAVINGS FIX</p>', unsafe_allow_html=True)
@@ -9340,24 +9375,48 @@ else:
     # THE FEEDBACK LOOP - Tax Refund Reinvestment
     st.markdown("### 🔄 The Feedback Loop: Refund Reinvestment")
     
-    description_box(
-        "Strategic Refund Deployment",
-        f"Your RRSP contributions of ${total_rrsp_contributions:,.0f} will generate an estimated tax refund of ${estimated_refund:,.0f}. "
-        "Deploy this refund strategically into your TFSA to accelerate tax-free wealth growth."
-    )
+    # v6.11.1: Use correct terminology - tax savings vs actual refund
+    if actual_refund is not None:
+        # User provided Box 22 - show actual refund
+        description_box(
+            "Strategic Refund Deployment",
+            f"Your RRSP contributions of ${total_rrsp_contributions:,.0f} will save you ${tax_savings_from_rrsp:,.0f} in taxes "
+            f"and generate an actual refund of ${actual_refund:,.0f} from CRA. "
+            "Deploy this refund strategically into your TFSA to accelerate tax-free wealth growth."
+        )
+    else:
+        # No Box 22 - show tax savings only
+        description_box(
+            "Strategic Tax Savings Deployment",
+            f"Your RRSP contributions of ${total_rrsp_contributions:,.0f} will save you ${tax_savings_from_rrsp:,.0f} in taxes. "
+            "Your actual refund depends on tax withheld (Box 22). Enter Box 22 in sidebar above to see actual refund amount. "
+            "Deploy your tax savings/refund strategically into your TFSA to accelerate tax-free wealth growth."
+        )
     
     col_refund1, col_refund2, col_refund3 = st.columns(3)
     
     with col_refund1:
-        st.metric(
-            "Tax Refund Generated",
-            f"${estimated_refund:,.0f}",
-            help="Estimated refund from RRSP tax deductions"
-        )
+        # v6.11.1: Show correct metric based on Box 22
+        if actual_refund is not None:
+            st.metric(
+                "Actual Refund from CRA",
+                f"${actual_refund:,.0f}",
+                delta="from CRA" if actual_refund > 0 else "owe to CRA",
+                help=f"Tax withheld (${tax_withheld:,.0f}) - Tax owed. This is what you'll get back from CRA."
+            )
+        else:
+            st.metric(
+                "Tax Savings from RRSP",
+                f"${tax_savings_from_rrsp:,.0f}",
+                help="How much less tax you'll pay. Enter Box 22 in sidebar to see actual refund."
+            )
     
     with col_refund2:
+        # Use actual refund if available, otherwise tax savings
+        refund_amount = actual_refund if actual_refund is not None else tax_savings_from_rrsp
+        
         # Determine what to show based on user's planning status
-        refund_matches_tfsa = abs(tfsa_lump_sum - estimated_refund) / max(1, estimated_refund) < 0.05
+        refund_matches_tfsa = abs(tfsa_lump_sum - refund_amount) / max(1, refund_amount) < 0.05 if refund_amount > 0 else False
         
         if refund_matches_tfsa:
             # User already planned to deploy refund to TFSA
@@ -9366,11 +9425,10 @@ else:
             metric_help = f"You've allocated ${tfsa_lump_sum:,.0f} to TFSA (matches your refund)"
         else:
             # Show how much refund COULD go to TFSA (considering total room, not remaining)
-            # This is how much of the refund fits in TOTAL TFSA room (before any deposits)
-            max_refund_to_tfsa = min(estimated_refund, tfsa_room)
+            max_refund_to_tfsa = min(refund_amount, tfsa_room) if refund_amount > 0 else 0
             deployment_status = max_refund_to_tfsa
             metric_label = "Refund Can Fit"
-            metric_help = f"Amount of ${estimated_refund:,.0f} refund that fits in ${tfsa_room:,.0f} TFSA room"
+            metric_help = f"Amount of ${refund_amount:,.0f} refund that fits in ${tfsa_room:,.0f} TFSA room"
         
         st.metric(
             metric_label,
@@ -9379,15 +9437,18 @@ else:
         )
     
     with col_refund3:
+        # Use actual refund if available, otherwise tax savings
+        refund_amount = actual_refund if actual_refund is not None else tax_savings_from_rrsp
+        
         # Calculate reinvestment rate based on deployment status
         if refund_matches_tfsa:
             # They've allocated their refund to TFSA
-            reinvest_pct = min(100, (tfsa_lump_sum / max(1, estimated_refund)) * 100)
+            reinvest_pct = min(100, (tfsa_lump_sum / max(1, refund_amount)) * 100) if refund_amount > 0 else 0
             metric_help = f"{reinvest_pct:.1f}% of refund allocated to TFSA"
         else:
             # Show potential if they fully deployed
-            max_deployment = min(estimated_refund, tfsa_room)
-            reinvest_pct = (max_deployment / max(1, estimated_refund)) * 100
+            max_deployment = min(refund_amount, tfsa_room) if refund_amount > 0 else 0
+            reinvest_pct = (max_deployment / max(1, refund_amount)) * 100 if refund_amount > 0 else 0
             metric_help = f"Up to {reinvest_pct:.1f}% of refund can go to TFSA"
         
         st.metric(
@@ -9398,18 +9459,22 @@ else:
     
     # Refund deployment calculator
     with st.expander("🧮 Refund Deployment Calculator", expanded=True):
-        st.markdown("**Strategic Question:** How much of your tax refund will you reinvest into your TFSA?")
+        # v6.11.1: Use correct refund amount (actual if Box 22 provided, otherwise tax savings)
+        refund_amount = actual_refund if actual_refund is not None else tax_savings_from_rrsp
+        refund_type = "actual refund" if actual_refund is not None else "tax savings"
         
-        if estimated_refund > 0:
+        st.markdown(f"**Strategic Question:** How much of your {refund_type} will you reinvest into your TFSA?")
+        
+        if refund_amount > 0:
             # Check if user has already planned to use refund for TFSA (within 5% tolerance)
-            refund_already_planned = abs(tfsa_lump_sum - estimated_refund) / max(1, estimated_refund) < 0.05
+            refund_already_planned = abs(tfsa_lump_sum - refund_amount) / max(1, refund_amount) < 0.05
             
             if refund_already_planned:
                 # User's TFSA contribution matches their refund - they've already planned it!
                 if tfsa_lump_sum <= tfsa_room:
                     st.success(f"""
                         ✅ **Refund Deployment Planned**: You've allocated ${tfsa_lump_sum:,.0f} to TFSA, 
-                        which matches your estimated tax refund of ${estimated_refund:,.0f}.
+                        which matches your {refund_type} of ${refund_amount:,.0f}.
                         
                         This fits within your ${tfsa_room:,.0f} TFSA room, leaving ${remaining_tfsa_room:,.0f} available.
                         
@@ -9429,7 +9494,7 @@ else:
                 
                 # Show what they've planned
                 st.markdown("**Your Current Plan:**")
-                st.write(f"- Tax refund: ${estimated_refund:,.0f}")
+                st.write(f"- {refund_type.title()}: ${refund_amount:,.0f}")
                 st.write(f"- Planned TFSA deposit: ${tfsa_lump_sum:,.0f}")
                 st.write(f"- TFSA room: ${tfsa_room:,.0f}")
                 st.write(f"- Remaining room: ${remaining_tfsa_room:,.0f}")
@@ -9438,28 +9503,28 @@ else:
                 # User hasn't fully deployed refund to TFSA - show planning calculator
                 # Calculate how much MORE they could deploy (on top of current TFSA contribution)
                 additional_room = max(0, remaining_tfsa_room)
-                can_deploy_more = additional_room > 0 and estimated_refund > tfsa_lump_sum
+                can_deploy_more = additional_room > 0 and refund_amount > tfsa_lump_sum
                 
                 if not can_deploy_more or additional_room == 0:
                     st.info(f"""
                         ℹ️ **No Additional TFSA Room**: You've already planned ${tfsa_lump_sum:,.0f} for TFSA.
                         Your TFSA room is ${tfsa_room:,.0f}, leaving ${additional_room:,.0f} remaining.
                         
-                        Your tax refund of ${estimated_refund:,.0f} could be used for:
+                        Your {refund_type} of ${refund_amount:,.0f} could be used for:
                         - Additional TFSA (if room available): ${additional_room:,.0f}
-                        - Non-registered investments: ${max(0, estimated_refund - additional_room):,.0f}
+                        - Non-registered investments: ${max(0, refund_amount - additional_room):,.0f}
                         - Other savings goals
                     """)
                 else:
                     # They have room and refund available
-                    refund_not_yet_allocated = max(0, estimated_refund - tfsa_lump_sum)
+                    refund_not_yet_allocated = max(0, refund_amount - tfsa_lump_sum)
                     max_additional = min(refund_not_yet_allocated, additional_room)
                     
                     st.info(f"""
                         💡 **Additional Deployment Available**: 
                         - Current TFSA plan: ${tfsa_lump_sum:,.0f}
-                        - Tax refund: ${estimated_refund:,.0f}
-                        - Unallocated refund: ${refund_not_yet_allocated:,.0f}
+                        - {refund_type.title()}: ${refund_amount:,.0f}
+                        - Unallocated amount: ${refund_not_yet_allocated:,.0f}
                         - Additional TFSA room: ${additional_room:,.0f}
                         
                         You could deploy up to ${max_additional:,.0f} more to TFSA.
