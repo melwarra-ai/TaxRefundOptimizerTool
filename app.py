@@ -63,13 +63,35 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.12.8 - Fix Portfolio Value Consistency & CAGR"
+APP_VERSION = "6.12.9 - Fix Quick Stats Portfolio Value & Label"
 APP_DATE = "February 20, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🐛 Version 6.12.9 - Fix Quick Stats Portfolio Value & Label (Feb 20, 2026)
+
+### 🐛 CRITICAL BUG FIXES
+
+**Fixed Quick Stats Portfolio Value:**
+- Still showing $48,300 instead of $46,800
+- Quick Stats card was using OLD growth logic
+- Applied growth to all contributions (should only apply to biweekly)
+- Now uses v6.12.6 logic (biweekly gets growth, lump sums don't)
+
+**Fixed Misleading Label:**
+- Old: "As of 2025" (suggests Dec 31, 2025)
+- New: "After 2025 Contributions" (accurate - includes lump sums in March 2026)
+- User deposited $46k in Jan-March 2026, not 2025!
+
+**What Changed:**
+- Quick Stats card uses correct growth timing
+- Label accurately reflects contribution deadline timing
+- Consistent with Year view calculations
+
+---
+
 ## 🐛 Version 6.12.8 - Fix Portfolio Value Consistency & CAGR (Feb 20, 2026)
 
 ### 🐛 CRITICAL BUG FIXES
@@ -6371,6 +6393,20 @@ with st.sidebar:
         
         # Show changelog inline when toggled
         if st.session_state.show_changelog_inline:
+            # v6.12.9 changelog - Fix Quick Stats Portfolio Value & Label
+            st.markdown('<div style="background: #ffebee; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6; border-left: 4px solid #d32f2f;">', unsafe_allow_html=True)
+            st.markdown('<p style="color: #c62828; font-weight: 700; font-size: 1.05em; margin: 0 0 16px 0;">🚨 v6.12.9 (2026-02-20 19:30 EST) - FIX QUICK STATS CARD</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #d32f2f; font-weight: 600; margin: 0 0 4px 0; font-size: 0.95em;">• FIXED: Quick Stats still showing $48,300</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ v6.12.8 fixed year view, but missed Quick Stats card ❌</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Quick Stats used old growth logic (all contributions) ❌</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 28px; font-size: 0.95em; line-height: 1.5;">○ Now uses v6.12.6 logic → Shows correct $46,800 ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #d32f2f; font-weight: 600; margin: 0 0 4px 0; font-size: 0.95em;">• FIXED: Misleading "As of 2025" label</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Suggested Dec 31, 2025 (but lump sums deposited March 2026!) ❌</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 28px; font-size: 0.95em; line-height: 1.5;">○ Now says "After 2025 Contributions" (accurate!) ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 8px 0; font-size: 0.95em;">Impact:</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0; font-size: 0.95em;">Quick Stats now consistent with Year view ($46,800). Label accurately reflects that lump sum deposits happen in Jan-March 2026, not 2025!</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             # v6.12.8 changelog - Fix Portfolio Value Consistency & CAGR
             st.markdown('<div style="background: #e8f5e9; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6; border-left: 4px solid #4caf50;">', unsafe_allow_html=True)
             st.markdown('<p style="color: #2e7d32; font-weight: 700; font-size: 1.05em; margin: 0 0 16px 0;">✅ v6.12.8 (2026-02-20 19:00 EST) - FIX PORTFOLIO VALUE & CAGR</p>', unsafe_allow_html=True)
@@ -6960,17 +6996,40 @@ if st.session_state.current_page == "Home":
             """, unsafe_allow_html=True)
         
         with col_q4:
-            # Get latest portfolio value
+            # v6.12.9: Get latest portfolio value using v6.12.6 growth timing
             latest_year_key = max(all_history.keys(), key=lambda x: int(x))
             latest = all_history[latest_year_key]
             latest_cagr = latest.get("target_cagr", 7.0) / 100
             latest_rrsp_start = latest.get("rrsp_balance_start", 0)
             latest_tfsa_start = latest.get("tfsa_balance_start", 0)
-            latest_rrsp_contrib = calculate_annual_rrsp(latest)
-            latest_tfsa_contrib = latest.get('tfsa_lump_sum', 0)
             
-            latest_rrsp_end = latest_rrsp_start * (1 + latest_cagr) + latest_rrsp_contrib * (1 + latest_cagr/2)
-            latest_tfsa_end = latest_tfsa_start * (1 + latest_cagr) + latest_tfsa_contrib * (1 + latest_cagr/2)
+            # Separate biweekly vs lump sum (v6.12.6 logic)
+            base_salary = latest.get('base_salary', 0)
+            biweekly_pct = latest.get('biweekly_pct', 0)
+            employer_match_cap = latest.get('employer_match', 0)
+            
+            # Biweekly contributions (get growth)
+            employee_rrsp = base_salary * (biweekly_pct / 100)
+            employer_rrsp = base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+            annual_rrsp_periodic = employee_rrsp + employer_rrsp
+            
+            # Lump sums (no growth)
+            rrsp_lump_sum = latest.get('rrsp_lump_sum_optimization', 0) + \
+                           latest.get('rrsp_lump_sum_additional', 0) + \
+                           latest.get('rrsp_lump_sum', 0)
+            tfsa_lump_sum = latest.get('tfsa_lump_sum', 0)
+            
+            # RRSP: Dec 31 (periodic + growth) + lump sums (no growth)
+            rrsp_growth_existing = latest_rrsp_start * latest_cagr
+            rrsp_growth_periodic = annual_rrsp_periodic * (latest_cagr / 2)
+            rrsp_dec31 = latest_rrsp_start + rrsp_growth_existing + annual_rrsp_periodic + rrsp_growth_periodic
+            latest_rrsp_end = rrsp_dec31 + rrsp_lump_sum  # After March 2026 deposits
+            
+            # TFSA: Dec 31 (existing balance growth) + lump sum (no growth)
+            tfsa_growth_existing = latest_tfsa_start * latest_cagr
+            tfsa_dec31 = latest_tfsa_start + tfsa_growth_existing
+            latest_tfsa_end = tfsa_dec31 + tfsa_lump_sum  # After March 2026 deposits
+            
             quick_portfolio_value = latest_rrsp_end + latest_tfsa_end
             
             st.markdown(f"""
@@ -6979,7 +7038,7 @@ if st.session_state.current_page == "Home":
                      box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
                     <div style="font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;">📊 Portfolio Value</div>
                     <div style="font-size: 2.2em; font-weight: 700;">${quick_portfolio_value:,.0f}</div>
-                    <div style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">As of {latest_year_key}</div>
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">After {latest_year_key} Contributions</div>
                 </div>
             """, unsafe_allow_html=True)
         
