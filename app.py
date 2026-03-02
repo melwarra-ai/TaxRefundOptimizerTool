@@ -63,14 +63,31 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.12.9 - Fix Quick Stats Portfolio Value & Label"
+APP_VERSION = "6.12.10 - Fix Global Wealth Summary Growth Timing"
 APP_DATE = "February 20, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
-## 🐛 Version 6.12.9 - Fix Quick Stats Portfolio Value & Label (Feb 20, 2026)
+## 🐛 Version 6.12.10 - Fix Global Wealth Summary Growth Timing (Feb 20, 2026)
+
+### 🐛 CRITICAL BUG FIX
+
+**Fixed Global Wealth Summary:**
+- Still showing $48,300 instead of $46,800 (4th place!)
+- Applied growth to ALL contributions ($46k × 5% = $2,300)
+- Should only apply growth to biweekly ($14.5k × 5% = $725)
+- Now uses v6.12.6 logic (biweekly gets growth, lump sums don't)
+
+**What Changed:**
+- Global Wealth Summary uses correct growth timing
+- Matches Year view, Home charts, and Quick Stats
+- Finally consistent everywhere!
+
+---
+
+## 🚨 Version 6.12.9 - Fix Quick Stats Portfolio Value & Label (Feb 20, 2026)
 
 ### 🐛 CRITICAL BUG FIXES
 
@@ -6393,6 +6410,17 @@ with st.sidebar:
         
         # Show changelog inline when toggled
         if st.session_state.show_changelog_inline:
+            # v6.12.10 changelog - Fix Global Wealth Summary Growth Timing
+            st.markdown('<div style="background: #ffebee; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6; border-left: 4px solid #d32f2f;">', unsafe_allow_html=True)
+            st.markdown('<p style="color: #c62828; font-weight: 700; font-size: 1.05em; margin: 0 0 16px 0;">🚨 v6.12.10 (2026-02-20 20:00 EST) - FIX GLOBAL WEALTH SUMMARY</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #d32f2f; font-weight: 600; margin: 0 0 4px 0; font-size: 0.95em;">• FIXED: Global Wealth Summary showing $48,300 (4th place!)</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Growth $2,300 (5.0%) = applying to ALL $46k ❌</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Should only apply to biweekly $14.5k ❌</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 28px; font-size: 0.95em; line-height: 1.5;">○ Now uses v6.12.6 logic → $46,800 everywhere! ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 8px 0; font-size: 0.95em;">Finally Complete:</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0; font-size: 0.95em;">All 4 locations now fixed: Year view ✅, Home charts ✅, Quick Stats ✅, Global Wealth ✅. Consistent $46,800 everywhere!</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             # v6.12.9 changelog - Fix Quick Stats Portfolio Value & Label
             st.markdown('<div style="background: #ffebee; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6; border-left: 4px solid #d32f2f;">', unsafe_allow_html=True)
             st.markdown('<p style="color: #c62828; font-weight: 700; font-size: 1.05em; margin: 0 0 16px 0;">🚨 v6.12.9 (2026-02-20 19:30 EST) - FIX QUICK STATS CARD</p>', unsafe_allow_html=True)
@@ -7219,21 +7247,38 @@ if st.session_state.current_page == "Home":
             total_tax_shield += refund
         
         # Get projected balances from latest year
+        # v6.12.10: Use v6.12.6 growth timing logic
         if latest_data:
             target_cagr = latest_data.get("target_cagr", 7.0) / 100
             rrsp_start = latest_data.get("rrsp_balance_start", 0)
             tfsa_start = latest_data.get("tfsa_balance_start", 0)
             
-            # Use helper function for RRSP calculation
-            annual_rrsp = calculate_annual_rrsp(latest_data)
-            tfsa_contrib = latest_data.get('tfsa_lump_sum', 0)
+            # Separate biweekly vs lump sum (v6.12.6 logic)
+            base_salary = latest_data.get('base_salary', 0)
+            biweekly_pct = latest_data.get('biweekly_pct', 0)
+            employer_match_cap = latest_data.get('employer_match', 0)
             
-            # Calculate end of year balances (growth + new contributions)
-            rrsp_growth = rrsp_start * target_cagr + annual_rrsp * (target_cagr / 2)
-            tfsa_growth = tfsa_start * target_cagr + tfsa_contrib * (target_cagr / 2)
+            # Biweekly contributions (get growth)
+            employee_rrsp = base_salary * (biweekly_pct / 100)
+            employer_rrsp = base_salary * (min(biweekly_pct, employer_match_cap) / 100)
+            annual_rrsp_periodic = employee_rrsp + employer_rrsp
             
-            latest_rrsp_balance = rrsp_start + rrsp_growth + annual_rrsp
-            latest_tfsa_balance = tfsa_start + tfsa_growth + tfsa_contrib
+            # Lump sums (no growth)
+            rrsp_lump_sum = latest_data.get('rrsp_lump_sum_optimization', 0) + \
+                           latest_data.get('rrsp_lump_sum_additional', 0) + \
+                           latest_data.get('rrsp_lump_sum', 0)
+            tfsa_lump_sum = latest_data.get('tfsa_lump_sum', 0)
+            
+            # RRSP: Dec 31 (periodic + growth) + lump sums (no growth)
+            rrsp_growth_existing = rrsp_start * target_cagr
+            rrsp_growth_periodic = annual_rrsp_periodic * (target_cagr / 2)
+            rrsp_dec31 = rrsp_start + rrsp_growth_existing + annual_rrsp_periodic + rrsp_growth_periodic
+            latest_rrsp_balance = rrsp_dec31 + rrsp_lump_sum  # After March 2026 deposits
+            
+            # TFSA: Dec 31 (existing balance growth) + lump sum (no growth)
+            tfsa_growth_existing = tfsa_start * target_cagr
+            tfsa_dec31 = tfsa_start + tfsa_growth_existing
+            latest_tfsa_balance = tfsa_dec31 + tfsa_lump_sum  # After March 2026 deposits
             
             total_portfolio_value = latest_rrsp_balance + latest_tfsa_balance
             total_investment_growth = total_portfolio_value - total_contributions
