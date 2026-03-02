@@ -63,13 +63,57 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.12.3 - Fix Ontario Health Premium Calculation"
+APP_VERSION = "6.12.5 - Fix Tax Building & Marginal Rate Bugs"
 APP_DATE = "February 20, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🐛 Version 6.12.5 - Fix Tax Building & Marginal Rate Bugs (Feb 20, 2026)
+
+### 🐛 CRITICAL BUG FIXES
+
+**Fixed Tax Building Visualizer:**
+- Showed Penthouse with blue bar when user below threshold
+- Used gross income instead of taxable income
+- Now only shows brackets where taxable income reaches
+
+**Fixed Marginal Rate Calculation:**
+- Used rate on GROSS income (47.97% Penthouse)
+- Should use rate on TAXABLE income (33.89% Floor 5)
+- Affects RRSP Room insight accuracy
+
+**What Changed:**
+- Tax Building chart uses taxable income boundaries
+- Marginal rate calculated from taxable income
+- Insights show correct savings rate
+
+**Impact:**
+- Chart now accurate (no phantom Penthouse bar)
+- RRSP insights show correct refund amounts
+- User understands true marginal savings rate
+
+---
+
+## 🐛 Version 6.12.4 - Fix TFSA Growth Opportunity Refund Display (Feb 20, 2026)
+
+### 🐛 BUG FIX
+
+**Fixed "Growth Opportunity: TFSA Capacity" Section:**
+- Showed "deploying your $21,994 tax refund" (WRONG - tax savings!)
+- Now shows "deploying your $16,517 actual refund" (CORRECT!)
+- Same pattern as v6.11.0, v6.11.1, v6.12.1 fixes
+- Complete consistency achieved
+
+**What Changed:**
+- Strategic Insights section now uses actual refund when Box 22 provided
+- Shows tax savings when Box 22 not provided
+- Both TFSA insight messages updated
+- 100% terminology consistency throughout app
+
+---
+
 ## 🐛 Version 6.12.3 - Fix Ontario Health Premium Calculation (Feb 20, 2026)
 
 ### 🐛 CRITICAL BUG FIX
@@ -6259,6 +6303,33 @@ with st.sidebar:
         
         # Show changelog inline when toggled
         if st.session_state.show_changelog_inline:
+            # v6.12.5 changelog - Fix Tax Building & Marginal Rate
+            st.markdown('<div style="background: #ffebee; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6; border-left: 4px solid #d32f2f;">', unsafe_allow_html=True)
+            st.markdown('<p style="color: #c62828; font-weight: 700; font-size: 1.05em; margin: 0 0 16px 0;">🚨 v6.12.5 (2026-02-20 17:00 EST) - FIX TAX BUILDING & MARGINAL RATE</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #d32f2f; font-weight: 600; margin: 0 0 4px 0; font-size: 0.95em;">• BUG #1: Tax Building Visualizer showed phantom Penthouse bar</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Used gross income ($226,924) instead of taxable ($180,924) ❌</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Showed Penthouse bar even when optimized ❌</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 28px; font-size: 0.95em; line-height: 1.5;">○ Now only shows brackets with taxable income ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #d32f2f; font-weight: 600; margin: 0 0 4px 0; font-size: 0.95em;">• BUG #2: Marginal rate used GROSS income</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Said marginal rate 47.97% (Penthouse on gross) ❌</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Should be 33.89% (Floor 5 on taxable) ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 28px; font-size: 0.95em; line-height: 1.5;">○ RRSP insight now shows correct refund: $3,389 per $10k ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 8px 0; font-size: 0.95em;">User Impact:</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0; font-size: 0.95em;">When optimized (below Penthouse), chart correctly shows Floor 5 status and insights show accurate 33.89% savings rate. Critical for users to understand their TRUE marginal savings from additional RRSP contributions.</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # v6.12.4 changelog - Fix TFSA Growth Opportunity
+            st.markdown('<div style="background: #e3f2fd; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6;">', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1565c0; font-weight: 600; font-size: 1em; margin: 0 0 16px 0;">v6.12.4 (2026-02-20 16:00 EST) - 🐛 FIX TFSA GROWTH OPPORTUNITY</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 4px 0; font-size: 0.95em;">• FIXED: "Growth Opportunity: TFSA Capacity" showed wrong refund</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Said "deploying your $21,994 tax refund" ❌</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Now says "deploying your $16,517 actual refund" ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 28px; font-size: 0.95em; line-height: 1.5;">○ Same pattern as v6.11.0, v6.11.1, v6.12.1 fixes ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 16px 0; font-size: 0.95em;">• BENEFIT: 100% terminology consistency achieved!</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 8px 0; font-size: 0.95em;">Sections Fixed:</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0; font-size: 0.95em;">Both TFSA insights in "Strategic Insights & Recommendations" now use actual refund when Box 22 provided, tax savings otherwise. Complete consistency across entire application: Strategic Overview ✅, Feedback Loop ✅, Deadline Dashboard ✅, Strategic Insights ✅</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             # v6.12.3 changelog - Fix Ontario Health Premium
             st.markdown('<div style="background: #fff3e0; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6; border-left: 4px solid #f57c00;">', unsafe_allow_html=True)
             st.markdown('<p style="color: #e65100; font-weight: 700; font-size: 1.05em; margin: 0 0 16px 0;">🔧 v6.12.3 (2026-02-20 15:00 EST) - FIX ONTARIO HEALTH PREMIUM</p>', unsafe_allow_html=True)
@@ -8993,7 +9064,9 @@ else:
     # For backward compatibility, keep estimated_refund as tax_savings
     estimated_refund = tax_savings_from_rrsp
     
-    marginal_rate = get_marginal_rate(total_gross_income)
+    # v6.12.5: Use TAXABLE income for marginal rate (the rate on the NEXT dollar)
+    # This is correct because additional RRSP reduces taxable income, not gross
+    marginal_rate = get_marginal_rate(taxable_income)
     
     # Optimization status
     penthouse_threshold = 181440
@@ -9667,21 +9740,25 @@ else:
     )
     
     # Build the tax building data
+    # v6.12.5: Only show brackets where TAXABLE income reaches, not gross income
     building_data = []
     
     for bracket in TAX_BRACKETS:
-        # Total income in this bracket
-        total_in_bracket = min(total_gross_income, bracket['high']) - bracket['low']
-        
-        if total_in_bracket <= 0:
+        # Check if taxable income reaches this bracket
+        if taxable_income <= bracket['low']:
+            # Taxable income doesn't reach this bracket at all - skip
             continue
         
-        # Taxable amount in this bracket
+        # Calculate taxable amount in this bracket
         taxed_amt = max(0, min(bracket['high'], taxable_income) - bracket['low'])
         
-        # Shielded amount in this bracket
-        shielded_amt = total_in_bracket - taxed_amt
+        # Calculate how much gross income was in this bracket
+        gross_in_bracket = max(0, min(total_gross_income, bracket['high']) - bracket['low'])
         
+        # Shielded amount = what was gross but not taxed
+        shielded_amt = max(0, gross_in_bracket - taxed_amt)
+        
+        # Add shielded portion if exists
         if shielded_amt > 0:
             building_data.append({
                 "Floor": bracket['name'],
@@ -9690,6 +9767,7 @@ else:
                 "Rate": f"{bracket['rate']*100:.2f}%"
             })
         
+        # Add taxable portion if exists
         if taxed_amt > 0:
             building_data.append({
                 "Floor": bracket['name'],
@@ -10157,6 +10235,15 @@ else:
     
     insights = []
     
+    # v6.12.4: Choose correct refund amount for insights
+    # Use actual refund if Box 22 provided, otherwise use tax savings
+    if actual_refund is not None:
+        refund_amount = actual_refund
+        refund_label = "actual refund" if actual_refund >= 0 else "amount owing"
+    else:
+        refund_amount = tax_savings_from_rrsp
+        refund_label = "tax savings"
+    
     # Insight 1: Penthouse exposure
     if penthouse_income > 0:
         if remaining_rrsp_room > 0:
@@ -10179,7 +10266,7 @@ else:
                 "message": f"You have ${penthouse_income:,.0f} exposed to the Penthouse rate (47.97%), but your ${rrsp_room:,.0f} RRSP room is fully used. "
                           f"You've achieved maximum optimization possible this year. "
                           f"Next year ({selected_year + 1}), you'll receive ~${min(31560, total_gross_income * 0.18):,.0f} new RRSP room to eliminate the remaining exposure. "
-                          f"Consider deploying your ${estimated_refund:,.0f} tax refund to TFSA for tax-free growth while you wait.",
+                          f"Consider deploying your ${abs(refund_amount):,.0f} {refund_label} to TFSA for tax-free growth while you wait.",
                 "priority": "medium"
             })
     
@@ -10200,8 +10287,8 @@ else:
             "icon": "🌱",
             "title": "Growth Opportunity: TFSA Capacity",
             "message": f"You have ${remaining_tfsa_room:,.0f} of unused TFSA room. "
-                      f"Consider deploying your ${estimated_refund:,.0f} tax refund into this tax-free growth vehicle. "
-                      f"Over 20 years at 7% annual returns, this could grow to ${estimated_refund * (1.07**20):,.0f} tax-free.",
+                      f"Consider deploying your ${abs(refund_amount):,.0f} {refund_label} into this tax-free growth vehicle. "
+                      f"Over 20 years at 7% annual returns, this could grow to ${abs(refund_amount) * (1.07**20):,.0f} tax-free.",
             "priority": "medium"
         })
     
