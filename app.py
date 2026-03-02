@@ -63,13 +63,37 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.12.5 - Fix Tax Building & Marginal Rate Bugs"
+APP_VERSION = "6.12.6 - Fix Growth Timing & Tax Bracket Messaging"
 APP_DATE = "February 20, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🐛 Version 6.12.6 - Fix Growth Timing & Tax Bracket Messaging (Feb 20, 2026)
+
+### 🐛 CRITICAL ACCURACY FIXES
+
+**Fixed Portfolio Growth Timing:**
+- Biweekly contributions (2025) get full year growth ✅
+- Lump sums (Jan-March 2026) get NO growth ✅
+- Separated "End of 2025" vs "After March 2026" values
+- Accurate representation of when money is invested
+
+**Fixed Tax Savings Messaging:**
+- Old: "At your marginal rate 33.89%, you save 33.89¢ per dollar"
+- New: Explains bracket REDUCTION from Penthouse to Floor 5
+- Shows how RRSP brought you down from 47.97% bracket
+- Total savings $21,994 properly explained
+
+**What Changed:**
+- Portfolio calculation separates periodic vs lump contributions
+- Dec 31, 2025 value excludes lump sums
+- March 2026 value includes lump sums (no growth)
+- Tax messaging shows bracket reduction impact
+
+---
+
 ## 🐛 Version 6.12.5 - Fix Tax Building & Marginal Rate Bugs (Feb 20, 2026)
 
 ### 🐛 CRITICAL BUG FIXES
@@ -6303,6 +6327,21 @@ with st.sidebar:
         
         # Show changelog inline when toggled
         if st.session_state.show_changelog_inline:
+            # v6.12.6 changelog - Fix Growth Timing & Tax Bracket Messaging
+            st.markdown('<div style="background: #e8f5e9; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6; border-left: 4px solid #4caf50;">', unsafe_allow_html=True)
+            st.markdown('<p style="color: #2e7d32; font-weight: 700; font-size: 1.05em; margin: 0 0 16px 0;">✅ v6.12.6 (2026-02-20 18:00 EST) - FIX GROWTH TIMING & TAX MESSAGING</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #388e3c; font-weight: 600; margin: 0 0 4px 0; font-size: 0.95em;">• FIXED: Portfolio growth timing accuracy</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Biweekly contributions (2025) get full year growth ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Lump sums (Jan-March 2026) get NO growth ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 28px; font-size: 0.95em; line-height: 1.5;">○ Separated "End of 2025" vs "After March 2026" values ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #388e3c; font-weight: 600; margin: 0 0 4px 0; font-size: 0.95em;">• FIXED: Tax savings messaging</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ Old: "At marginal rate 33.89%, save 33.89¢ per dollar" ❌</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ New: Shows bracket REDUCTION (47.97% → 33.89%) ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 28px; font-size: 0.95em; line-height: 1.5;">○ Explains $21,994 total savings properly ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 8px 0; font-size: 0.95em;">Key Changes:</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0; font-size: 0.95em;">Portfolio timing now accurate: lump sums deposited Jan-March 2026 don\'t get 2025 growth. Tax message explains how RRSP brought you from higher bracket down to current bracket, showing true benefit.</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             # v6.12.5 changelog - Fix Tax Building & Marginal Rate
             st.markdown('<div style="background: #ffebee; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6; border-left: 4px solid #d32f2f;">', unsafe_allow_html=True)
             st.markdown('<p style="color: #c62828; font-weight: 700; font-size: 1.05em; margin: 0 0 16px 0;">🚨 v6.12.5 (2026-02-20 17:00 EST) - FIX TAX BUILDING & MARGINAL RATE</p>', unsafe_allow_html=True)
@@ -8978,26 +9017,47 @@ else:
     over_contribution_amount = max(0, -raw_remaining_room)
     
     # Portfolio calculations
+    # v6.12.6: Separate growth timing for periodic vs lump sum contributions
     rrsp_balance_start = year_data.get("rrsp_balance_start", 0)
     tfsa_balance_start = year_data.get("tfsa_balance_start", 0)
     target_cagr = year_data.get("target_cagr", 7.0) / 100
 
-    # Personal RRSP growth
-    rrsp_growth_existing = rrsp_balance_start * target_cagr
-    rrsp_growth_new_contrib = personal_rrsp_contributions * (target_cagr / 2)
-    rrsp_balance_end = rrsp_balance_start + rrsp_growth_existing + personal_rrsp_contributions + rrsp_growth_new_contrib
+    # PERIODIC contributions (biweekly throughout year) - GET GROWTH
+    # These happen during the calendar year, so they get full year growth
+    periodic_growth_existing = rrsp_balance_start * target_cagr
+    periodic_growth_new = annual_rrsp_periodic * (target_cagr / 2)  # Half year average
+    
+    # End of calendar year (Dec 31, 2025)
+    rrsp_balance_dec31 = rrsp_balance_start + periodic_growth_existing + annual_rrsp_periodic + periodic_growth_new
+    
+    # LUMP SUM contributions (Jan-March 2026) - NO GROWTH YET
+    # These are deposited after calendar year ends, so no 2025 growth
+    # They count for 2026 growth calculations
+    
+    # After March 1, 2026 deadline (includes lump sums, no growth on them)
+    rrsp_balance_after_deposits = rrsp_balance_dec31 + rrsp_lump_sum
+    
+    # For backward compatibility with existing code, set rrsp_balance_end
+    # This represents the value AFTER making all 2025 tax year contributions
+    rrsp_balance_end = rrsp_balance_after_deposits
 
     # Spouse RRSP growth (balance grows + new spousal contributions)
+    # Spousal is typically lump sum, so NO growth on new contributions
     spouse_rrsp_growth_existing = spouse_rrsp_balance_start * target_cagr
-    spouse_rrsp_growth_new = spousal_rrsp_contribution * (target_cagr / 2)
-    spouse_rrsp_balance_end = spouse_rrsp_balance_start + spouse_rrsp_growth_existing + spousal_rrsp_contribution + spouse_rrsp_growth_new
+    spouse_rrsp_balance_dec31 = spouse_rrsp_balance_start + spouse_rrsp_growth_existing
+    spouse_rrsp_balance_after_deposits = spouse_rrsp_balance_dec31 + spousal_rrsp_contribution
+    spouse_rrsp_balance_end = spouse_rrsp_balance_after_deposits
 
-    # TFSA growth
+    # TFSA growth (typically lump sum contributions)
     tfsa_growth_existing = tfsa_balance_start * target_cagr
-    tfsa_growth_new_contrib = tfsa_lump_sum * (target_cagr / 2)
-    tfsa_balance_end = tfsa_balance_start + tfsa_growth_existing + tfsa_lump_sum + tfsa_growth_new_contrib
+    tfsa_balance_dec31 = tfsa_balance_start + tfsa_growth_existing
+    tfsa_balance_after_deposits = tfsa_balance_dec31 + tfsa_lump_sum
+    tfsa_balance_end = tfsa_balance_after_deposits
 
-    total_portfolio_value = rrsp_balance_end + spouse_rrsp_balance_end + tfsa_balance_end
+    # Two portfolio values to track
+    total_portfolio_dec31 = rrsp_balance_dec31 + spouse_rrsp_balance_dec31 + tfsa_balance_dec31
+    total_portfolio_after_deposits = rrsp_balance_end + spouse_rrsp_balance_end + tfsa_balance_end
+    total_portfolio_value = total_portfolio_after_deposits  # For backward compatibility
     
     # v6.11.0: Calculate BOTH tax savings AND actual refund
     # Tax savings = how much less tax you pay due to RRSP
@@ -9400,10 +9460,11 @@ else:
     
     with col5:
         st.metric(
-            "Total Portfolio Value",
-            f"${total_portfolio_value:,.0f}",
-            delta=f"+{target_cagr*100:.1f}% target",
-            help="Combined RRSP + TFSA projected end-of-year value"
+            "Portfolio After Tax Contributions",
+            f"${total_portfolio_after_deposits:,.0f}",
+            delta=f"+{target_cagr*100:.1f}% CAGR",
+            help=f"Portfolio value after completing all {selected_year} tax year contributions (by March {selected_year+1}). "
+                 f"Biweekly contributions get {target_cagr*100:.1f}% growth; lump sums (deposited Jan-March {selected_year+1}) have no growth yet."
         )
     
     # v6.11.0/v6.12.0: Educational content - Tax Savings vs Actual Refund with Credits
@@ -9430,12 +9491,30 @@ else:
         col_explain1, col_explain2 = st.columns(2)
         
         with col_explain1:
-            st.success(f"""
-            ✅ **Tax Savings from RRSP: ${tax_savings_from_rrsp:,.0f}**
+            # v6.12.6: Calculate marginal rate WITHOUT RRSP to show bracket reduction
+            marginal_rate_without_rrsp = get_marginal_rate(total_gross_income)
+            marginal_rate_with_rrsp = marginal_rate  # Already calculated on taxable income
             
-            Your RRSP contributions of ${total_rrsp_contributions:,.0f} reduce your taxes by ${tax_savings_from_rrsp:,.0f}.  
-            At your marginal rate of {marginal_rate*100:.2f}%, you save {marginal_rate*100:.2f}¢ for every dollar contributed.
-            """)
+            # Check if RRSP brought user down from a higher bracket
+            bracket_reduced = marginal_rate_without_rrsp > marginal_rate_with_rrsp
+            
+            if bracket_reduced:
+                # Show bracket reduction message
+                st.success(f"""
+                ✅ **Tax Savings from RRSP: ${tax_savings_from_rrsp:,.0f}**
+                
+                Your ${total_rrsp_contributions:,.0f} RRSP contributions brought you down from the **{marginal_rate_without_rrsp*100:.2f}% bracket** to the **{marginal_rate_with_rrsp*100:.2f}% bracket**, saving you ${tax_savings_from_rrsp:,.0f} in total taxes.
+                
+                **Average savings rate: {(tax_savings_from_rrsp/total_rrsp_contributions)*100:.2f}%** on your RRSP contributions.
+                """)
+            else:
+                # No bracket change - show standard message
+                st.success(f"""
+                ✅ **Tax Savings from RRSP: ${tax_savings_from_rrsp:,.0f}**
+                
+                Your RRSP contributions of ${total_rrsp_contributions:,.0f} reduce your taxes by ${tax_savings_from_rrsp:,.0f}.  
+                At your marginal rate of {marginal_rate*100:.2f}%, you save {marginal_rate*100:.2f}¢ for every dollar contributed.
+                """)
         
         with col_explain2:
             if actual_refund > 0:
