@@ -63,13 +63,35 @@ import traceback
 # APP CONFIGURATION
 # ============================================================================
 
-APP_VERSION = "6.12.6 - Fix Growth Timing & Tax Bracket Messaging"
+APP_VERSION = "6.12.7 - Fix Variable Name References (Hotfix)"
 APP_DATE = "February 20, 2026"
 APP_NAME = "Canadian Tax Optimizer"
 APP_SUBTITLE = "Institutional-Grade RRSP & TFSA Planning Platform"
 
 # Version Changelog
 CHANGELOG = """
+## 🚨 Version 6.12.7 - Fix Variable Name References (HOTFIX) (Feb 20, 2026)
+
+### 🐛 CRITICAL CRASH FIX
+
+**Fixed App Crash:**
+- v6.12.6 renamed growth variables but missed Portfolio Growth Tracker table
+- App crashed with NameError on line 9733
+- Updated all old variable references to new names
+
+**What Changed:**
+- Portfolio table now uses correct variable names
+- periodic_growth_existing + periodic_growth_new (RRSP)
+- spouse_rrsp_growth_existing only (no new contrib growth)
+- tfsa_growth_existing only (no new contrib growth)
+
+**Impact:**
+- App no longer crashes
+- Portfolio table displays correctly
+- Growth calculations accurate per v6.12.6 logic
+
+---
+
 ## 🐛 Version 6.12.6 - Fix Growth Timing & Tax Bracket Messaging (Feb 20, 2026)
 
 ### 🐛 CRITICAL ACCURACY FIXES
@@ -6327,6 +6349,16 @@ with st.sidebar:
         
         # Show changelog inline when toggled
         if st.session_state.show_changelog_inline:
+            # v6.12.7 changelog - Fix Variable Name References (Hotfix)
+            st.markdown('<div style="background: #ffebee; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6; border-left: 4px solid #d32f2f;">', unsafe_allow_html=True)
+            st.markdown('<p style="color: #c62828; font-weight: 700; font-size: 1.05em; margin: 0 0 16px 0;">🚨 v6.12.7 (2026-02-20 18:30 EST) - HOTFIX: APP CRASH</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #d32f2f; font-weight: 600; margin: 0 0 4px 0; font-size: 0.95em;">• FIXED: NameError crash on line 9733</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 4px 28px; font-size: 0.95em; line-height: 1.5;">○ v6.12.6 renamed variables but missed Portfolio Growth Tracker ❌</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0 0 16px 28px; font-size: 0.95em; line-height: 1.5;">○ Updated all old variable references to new names ✅</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #1976d2; font-weight: 600; margin: 0 0 8px 0; font-size: 0.95em;">What Changed:</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color: #424242; margin: 0; font-size: 0.95em;">Portfolio table: periodic_growth_existing + periodic_growth_new (RRSP with biweekly), spouse_rrsp_growth_existing only (lump sum, no growth), tfsa_growth_existing only (lump sum, no growth). App no longer crashes!</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             # v6.12.6 changelog - Fix Growth Timing & Tax Bracket Messaging
             st.markdown('<div style="background: #e8f5e9; padding: 20px 24px; border-radius: 8px; margin: 16px 0; line-height: 1.6; border-left: 4px solid #4caf50;">', unsafe_allow_html=True)
             st.markdown('<p style="color: #2e7d32; font-weight: 700; font-size: 1.05em; margin: 0 0 16px 0;">✅ v6.12.6 (2026-02-20 18:00 EST) - FIX GROWTH TIMING & TAX MESSAGING</p>', unsafe_allow_html=True)
@@ -9729,8 +9761,8 @@ else:
         portfolio_table_data.append({
             "Account": "🏦 RRSP (Yours)",
             "Start Balance": f"${rrsp_balance_start:,.0f}",
-            "New Contributions": f"${personal_rrsp_contributions:,.0f}",
-            "Investment Growth": f"${rrsp_growth_existing + rrsp_growth_new_contrib:,.0f}",
+            "New Contributions": f"${annual_rrsp_periodic + rrsp_lump_sum:,.0f}",
+            "Investment Growth": f"${periodic_growth_existing + periodic_growth_new:,.0f}",
             "End Balance": f"${rrsp_balance_end:,.0f}",
             "Net Gain": f"${rrsp_balance_end - rrsp_balance_start:,.0f}"
         })
@@ -9741,7 +9773,7 @@ else:
                 "Account": f"👫 RRSP ({spouse_label})",
                 "Start Balance": f"${spouse_rrsp_balance_start:,.0f}",
                 "New Contributions": f"${spousal_rrsp_contribution:,.0f}",
-                "Investment Growth": f"${spouse_rrsp_growth_existing + spouse_rrsp_growth_new:,.0f}",
+                "Investment Growth": f"${spouse_rrsp_growth_existing:,.0f}",
                 "End Balance": f"${spouse_rrsp_balance_end:,.0f}",
                 "Net Gain": f"${spouse_rrsp_balance_end - spouse_rrsp_balance_start:,.0f}"
             })
@@ -9751,17 +9783,17 @@ else:
             "Account": "🌱 TFSA",
             "Start Balance": f"${tfsa_balance_start:,.0f}",
             "New Contributions": f"${tfsa_lump_sum:,.0f}",
-            "Investment Growth": f"${tfsa_growth_existing + tfsa_growth_new_contrib:,.0f}",
+            "Investment Growth": f"${tfsa_growth_existing:,.0f}",
             "End Balance": f"${tfsa_balance_end:,.0f}",
             "Net Gain": f"${tfsa_balance_end - tfsa_balance_start:,.0f}"
         })
         
         # Total Row (household)
         total_start = rrsp_balance_start + spouse_rrsp_balance_start + tfsa_balance_start
-        total_contributions = total_rrsp_contributions + tfsa_lump_sum
-        total_growth = (rrsp_growth_existing + rrsp_growth_new_contrib +
-                        spouse_rrsp_growth_existing + spouse_rrsp_growth_new +
-                        tfsa_growth_existing + tfsa_growth_new_contrib)
+        total_contributions = (annual_rrsp_periodic + rrsp_lump_sum) + spousal_rrsp_contribution + tfsa_lump_sum
+        total_growth = (periodic_growth_existing + periodic_growth_new +
+                        spouse_rrsp_growth_existing +
+                        tfsa_growth_existing)
         
         portfolio_table_data.append({
             "Account": "📊 HOUSEHOLD TOTAL",
